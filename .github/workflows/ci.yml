@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: cmpdi
+          POSTGRES_PASSWORD: cmpdi
+          POSTGRES_DB: cmpdi
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cmpdi"
+          --health-interval 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r backend/requirements.txt
+      - name: Lint
+        run: |
+          pip install ruff
+          ruff check backend/app backend/scripts backend/tests
+      - name: Tests
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg2://cmpdi:cmpdi@localhost:5432/cmpdi
+        run: python -m pytest tests -v
+      - name: Build frontend
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: cd frontend && npm install && npm run build

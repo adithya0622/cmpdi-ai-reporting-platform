@@ -1,0 +1,13 @@
+[lint]
+select = ["E", "F", "W", "I", "B", "DTZ", "RUF", "SIM", "S"]
+ignore = [
+    "B008",   # FastAPI Depends() in defaults - standard pattern
+    "BLE001", # blind except is deliberate: graceful degradation so features work without LLM/DB
+    "S110",   # try-except-pass in audit/log paths - must never break requests
+    "B904",   # HTTPException re-raise inside except without from - FastAPI convention here
+    "E501",   # long lines allowed
+]
+
+[lint.per-file-ignores]
+"scripts/*.py" = ["E402", "S603", "S607", "S311"]
+"backend/tests/*.py" = ["E402", "S101", "S105"]

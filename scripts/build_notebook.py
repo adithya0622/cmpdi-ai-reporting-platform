@@ -1,0 +1,292 @@
+import json
+import os
+
+def create_notebook():
+    notebook = {
+        'cells': [
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': [
+                    '# CMPDI / Coal India Limited: Domain-Specific Fine-Tuning of Qwen 2.5 3B with LoRA\n',
+                    '### Smart India Hackathon (SIH) — Automated Extraction & Reporting Platform for Ministry of Coal\n',
+                    '\n',
+                    'This notebook fine-tunes **Qwen 2.5 3B Instruct** on domain-specific coal mining reports (CMPDI borehole logs, NLC mine equipment stoppage reports, CIL quarterly production statements, and Parliamentary Q&As).\n',
+                    '\n',
+                    '#### Key Architecture:\n',
+                    '- **Base Model:** `Qwen/Qwen2.5-3B-Instruct`\n',
+                    '- **Quantization:** 4-bit NormalFloat4 (NF4) with double quantization via `bitsandbytes`\n',
+                    '- **Adaptation:** Low-Rank Adaptation (LoRA) with rank r=16, alpha=32, targeting linear projection layers (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`)\n',
+                    '- **Trainable Parameters:** ~18M (less than 0.6% of base model weights)\n',
+                    '- **Execution Time:** ~3-4 minutes on a free Google Colab T4 GPU'
+                ]
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': ['## Step 1: Install Required Libraries & Check GPU']
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    '!pip install -q --upgrade pip\n',
+                    '!pip install -q torch transformers peft datasets trl bitsandbytes accelerate\n',
+                    '\n',
+                    'import torch\n',
+                    'print("CUDA Available:", torch.cuda.is_available())\n',
+                    'if torch.cuda.is_available():\n',
+                    '    print("GPU:", torch.cuda.get_device_name(0))\n',
+                    '    print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")\n',
+                    'else:\n',
+                    '    print("Warning: Running on CPU. Please switch Runtime to GPU: Runtime -> Change runtime type -> T4 GPU")'
+                ]
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': ['## Step 2: Load and Verify Cleaned Training Dataset (train.jsonl)']
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'import json\n',
+                    'import os\n',
+                    'from datasets import Dataset\n',
+                    '\n',
+                    '# Check if train.jsonl was uploaded\n',
+                    'if not os.path.exists("train.jsonl"):\n',
+                    '    print("Please upload your train.jsonl file into the Colab file tree on the left sidebar.")\n',
+                    '    try:\n',
+                    '        from google.colab import files\n',
+                    '        files.upload()\n',
+                    '    except Exception:\n',
+                    '        pass\n',
+                    '\n',
+                    'with open("train.jsonl", "r", encoding="utf-8") as fh:\n',
+                    '    raw_data = [json.loads(line) for line in fh]\n',
+                    '\n',
+                    'print(f"[+] Loaded {len(raw_data)} high-confidence training pairs.")\n',
+                    'print("Sample 1 text snippet:", raw_data[0]["text"][:200])\n',
+                    'print("Sample 1 fields keys:", list(raw_data[0]["fields"].keys()))'
+                ]
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': ['## Step 3: Load Base Model with 4-bit Quantization (QLoRA)']
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig\n',
+                    'from peft import LoraConfig, TaskType, get_peft_model\n',
+                    '\n',
+                    'model_id = "Qwen/Qwen2.5-3B-Instruct"\n',
+                    'print(f"[*] Loading tokenizer: {model_id}...")\n',
+                    'tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)\n',
+                    'if tokenizer.pad_token is None:\n',
+                    '    tokenizer.pad_token = tokenizer.eos_token\n',
+                    '\n',
+                    'print("[*] Configuring 4-bit NormalFloat4 quantization...")\n',
+                    'bnb_config = BitsAndBytesConfig(\n',
+                    '    load_in_4bit=True,\n',
+                    '    bnb_4bit_quant_type="nf4",\n',
+                    '    bnb_4bit_compute_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,\n',
+                    '    bnb_4bit_use_double_quant=True,\n',
+                    ')\n',
+                    '\n',
+                    'model = AutoModelForCausalLM.from_pretrained(\n',
+                    '    model_id,\n',
+                    '    quantization_config=bnb_config,\n',
+                    '    device_map="auto",\n',
+                    '    trust_remote_code=True,\n',
+                    ')\n',
+                    '\n',
+                    'lora_config = LoraConfig(\n',
+                    '    r=16,\n',
+                    '    lora_alpha=32,\n',
+                    '    lora_dropout=0.05,\n',
+                    '    bias="none",\n',
+                    '    task_type=TaskType.CAUSAL_LM,\n',
+                    '    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],\n',
+                    ')\n',
+                    '\n',
+                    'model = get_peft_model(model, lora_config)\n',
+                    'model.print_trainable_parameters()'
+                ]
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': ['## Step 4: Format Training Data into ChatML Instruction Template']
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'formatted_records = []\n',
+                    'system_prompt = (\n',
+                    '    "You are CMPDI\'s expert geological and mining document extraction engine. "\n',
+                    '    "Extract all verified production figures, borehole reserves, depths, and operational metrics into structured JSON."\n',
+                    ')\n',
+                    '\n',
+                    'for item in raw_data:\n',
+                    '    text_content = item.get("text", "").strip()\n',
+                    '    fields = item.get("fields", {})\n',
+                    '    if not text_content or not fields:\n',
+                    '        continue\n',
+                    '    messages = [\n',
+                    '        {"role": "system", "content": system_prompt},\n',
+                    '        {"role": "user", "content": f"Extract structured figures from this document text:\\n\\n{text_content}"},\n',
+                    '        {"role": "assistant", "content": json.dumps(fields, ensure_ascii=False, indent=2)},\n',
+                    '    ]\n',
+                    '    formatted_records.append({"text": tokenizer.apply_chat_template(messages, tokenize=False)})\n',
+                    '\n',
+                    'train_dataset = Dataset.from_list(formatted_records)\n',
+                    'print(f"[+] Total prepared training dataset size: {len(train_dataset)} examples")'
+                ]
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': ['## Step 5: Configure Hyperparameters & Run SFTTrainer']
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'from transformers import TrainingArguments\n',
+                    'from trl import SFTTrainer\n',
+                    '\n',
+                    'training_args = TrainingArguments(\n',
+                    '    output_dir="./checkpoints",\n',
+                    '    num_train_epochs=3,\n',
+                    '    per_device_train_batch_size=2,\n',
+                    '    gradient_accumulation_steps=4,\n',
+                    '    learning_rate=2e-4,\n',
+                    '    lr_scheduler_type="cosine",\n',
+                    '    warmup_ratio=0.05,\n',
+                    '    logging_steps=5,\n',
+                    '    save_strategy="epoch",\n',
+                    '    fp16=not torch.cuda.is_bf16_supported(),\n',
+                    '    bf16=torch.cuda.is_bf16_supported(),\n',
+                    '    optim="paged_adamw_8bit",\n',
+                    '    report_to="none",\n',
+                    ')\n',
+                    '\n',
+                    'trainer = SFTTrainer(\n',
+                    '    model=model,\n',
+                    '    train_dataset=train_dataset,\n',
+                    '    dataset_text_field="text",\n',
+                    '    max_seq_length=2048,\n',
+                    '    tokenizer=tokenizer,\n',
+                    '    args=training_args,\n',
+                    ')\n',
+                    '\n',
+                    'print("[*] Commencing QLoRA training...")\n',
+                    'trainer.train()\n',
+                    'print("[+] Training finished successfully!")'
+                ]
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': ['## Step 6: Save LoRA Adapter & Download for Deployment']
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'import shutil\n',
+                    '\n',
+                    'adapter_dir = "cmpdi_qwen_adapter"\n',
+                    'print(f"[*] Saving adapter weights to {adapter_dir}...")\n',
+                    'model.save_pretrained(adapter_dir)\n',
+                    'tokenizer.save_pretrained(adapter_dir)\n',
+                    '\n',
+                    '# Create zip archive for 1-click download\n',
+                    'shutil.make_archive("cmpdi_qwen_adapter", "zip", adapter_dir)\n',
+                    'print("[+] Created cmpdi_qwen_adapter.zip!")\n',
+                    '\n',
+                    'try:\n',
+                    '    from google.colab import files\n',
+                    '    files.download("cmpdi_qwen_adapter.zip")\n',
+                    '    print("[+] Triggered download in browser!")\n',
+                    'except Exception as e:\n',
+                    '    print("Download manually from left sidebar: cmpdi_qwen_adapter.zip")'
+                ]
+            },
+            {
+                'cell_type': 'markdown',
+                'metadata': {},
+                'source': ['## Step 7: Benchmark Inference on Unseen Test Document']
+            },
+            {
+                'cell_type': 'code',
+                'execution_count': None,
+                'metadata': {},
+                'outputs': [],
+                'source': [
+                    'test_doc = """NLC INDIA LTD\n',
+                    'Stoppage Report for MINE-I\n',
+                    'Date: 12.09.2026\n',
+                    'NSB/BWE-1140 / OVER BURDEN / TWH: 18.00 / EWH: 12.50 / Output: 1420.500 / Rate: 113.640\n',
+                    'Stoppage From Stoppage To Duration Stoppage Description\n',
+                    '0600 0730 1.50 Shift change and pre-start inspection\n',
+                    '1100 1345 2.75 Chute jam clearance at transfer point TP-4\n',
+                    '1800 1915 1.25 Power supply tripping - Substation 3 feeder\n',
+                    '"""\n',
+                    '\n',
+                    'test_prompt = f"Extract structured figures from this document text:\\n\\n{test_doc}"\n',
+                    'messages = [\n',
+                    '    {"role": "system", "content": system_prompt},\n',
+                    '    {"role": "user", "content": test_prompt},\n',
+                    ']\n',
+                    'input_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)\n',
+                    'inputs = tokenizer(input_text, return_tensors="pt").to("cuda")\n',
+                    '\n',
+                    'with torch.no_grad():\n',
+                    '    outputs = model.generate(**inputs, max_new_tokens=512, temperature=0.1, do_sample=False)\n',
+                    '\n',
+                    'response = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)\n',
+                    'print("=== EXTRACTED JSON OUTPUT FROM FINE-TUNED MODEL ===")\n',
+                    'print(response)'
+                ]
+            }
+        ],
+        'metadata': {
+            'accelerator': 'GPU',
+            'colab': {
+                'gpuType': 'T4',
+                'provenance': []
+            },
+            'language_info': {
+                'name': 'python'
+            }
+        },
+        'nbformat': 4,
+        'nbformat_minor': 0
+    }
+
+    out_file = os.path.join("notebooks", "Train_Qwen2_5_CMPDI_LoRA.ipynb")
+    with open(out_file, "w", encoding="utf-8") as f:
+        json.dump(notebook, f, indent=2)
+    print(f"Generated {out_file} successfully!")
+
+if __name__ == "__main__":
+    create_notebook()

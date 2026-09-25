@@ -1,0 +1,108 @@
+{
+  "_description": "Ground-truth anchors parsed from official Government of India publications. Every synthetic corpus figure must reconcile to these. Cross-checks noted per source.",
+  "sources": [
+    {
+      "id": "pcs_2223",
+      "title": "Provisional Coal Statistics 2022-23, Coal Controller's Organisation, Ministry of Coal",
+      "url": "https://www.coal.nic.in/sites/default/files/2023-10/coal_171023.pdf",
+      "local_file": "data/real_data/provisional_coal_stats_2022-23.pdf",
+      "statement_production": "Statement 4 (p.43), Statement 7 despatch (p.45)",
+      "cross_check": "CIL sum of subsidiaries = 703.204 MT matches coal.gov.in 'Production and Supplies' (703.20 MT FY2022-23); despatch table printed CIL total 694.544 MT matches row sums"
+    },
+    {
+      "id": "moc_prod_supplies",
+      "title": "Ministry of Coal - Production and Supplies (official statistics page)",
+      "url": "https://www.coal.nic.in/major-statistics/production-and-supplies",
+      "cross_check": "CIL 773.81 MT FY2023-24, 703.20 MT FY2022-23, 781.056 MT FY2024-25; All India 997.83 MT FY2023-24"
+    },
+    {
+      "id": "ls_au5084",
+      "title": "Lok Sabha Unstarred Question 5084, answered 02.04.2025 - Coal Production in Odisha",
+      "url": "https://sansad.in/getFile/loksabhaquestions/annex/184/AU5084_soPutN.pdf?source=pqals",
+      "local_file": "data/real_data/lok_sabha_AU5084_coal_production.pdf"
+    },
+    {
+      "id": "rs_replies_2026",
+      "title": "Ministry of Mines - Replies to Parliament Questions in Rajya Sabha (Q2668, 16.03.2026)",
+      "url": "https://mines.gov.in/admin/storage/ckeditor/21__Replies_to_Parliament_Questions_in_Rajya_Sabha_1780919767.pdf",
+      "local_file": "data/real_data_ingested/rajya_sabha_2668_replies.pdf"
+    },
+    {
+      "id": "coal_directory_2425",
+      "title": "Coal Directory of India 2024-25, Coal Controller's Organisation (full PDF + 11 Excel chapters)",
+      "url": "https://www.coal.nic.in/major-statistics/coal-statistics",
+      "local_file": "data/real_data/Coal_Directory_of_India_2024-25.pdf",
+      "note": "Excel chapters also ingested: data/real_data/Coal_Directory_2024-25_Chapter_01..11.xlsx"
+    },
+    {
+      "id": "cmpdi_ar_2425",
+      "title": "50th Annual Report & Accounts 2024-25, Central Mine Planning & Design Institute Ltd",
+      "url": "https://www.cmpdi.co.in/sites/default/files/2025-08/50th%20Annual%20Report%20of%20CMPDIL%20for%20the%20FY%202024-25.pdf",
+      "local_file": "data/real_data/CMPDI_Annual_Report_2024-25.pdf"
+    },
+    {
+      "id": "cmpdi_inventory_2025",
+      "title": "Indian Coal and Lignite Resources 2025 (National Inventory), CMPDI",
+      "url": "https://www.cmpdi.co.in/sites/default/files/2025-10/National%20Inventory%20for%20Coal%20and%20lignite_2025.pdf",
+      "local_file": "data/real_data/CMPDI_National_Inventory_Coal_Lignite_2025.pdf"
+    },
+    {
+      "id": "moc_monthly_mar24",
+      "title": "Monthly Summary (Production & Supplies) March 2024, Ministry of Coal",
+      "url": "https://www.coal.gov.in/sites/default/files/2024-04/msg-march24.pdf",
+      "local_file": "data/real_data/msg-march24_monthly_summary.pdf"
+    },
+    {
+      "id": "pib_yer_2025",
+      "title": "PIB Year End Review 2025 - Ministry of Coal (saved as text)",
+      "url": "https://pib.gov.in/PressReleaseIframePage.aspx?PRID=2095712",
+      "local_file": "data/real_data/PIB_Year_End_Review_2025_MoC.txt"
+    },
+    {
+      "id": "moc_ar_exploration",
+      "title": "MoC Annual Report chapters on Promotional & Detailed Exploration (CMPDI), 2023-24 & 2024-25",
+      "url": "https://coal.gov.in/sites/default/files/2025-02/chap12AnnualReport2025en2.pdf",
+      "local_file": "data/real_data/MoC_Annual_Report_2024-25_chap12_exploration.pdf"
+    }
+  ],
+  "cil_production_mt": {
+    "2022-23": 703.204,
+    "2023-24": 773.81,
+    "2024-25": 781.056
+  },
+  "company_production_mt_2022_23": {
+    "ECL": 35.018,
+    "BCCL": 36.179,
+    "CCL": 76.087,
+    "NCL": 131.169,
+    "WCL": 64.283,
+    "SECL": 167.006,
+    "MCL": 193.262,
+    "NEC": 0.200
+  },
+  "company_despatch_mt_2022_23": {
+    "ECL": 35.340,
+    "BCCL": 35.563,
+    "CCL": 75.024,
+    "NCL": 133.512,
+    "WCL": 62.148,
+    "SECL": 160.021,
+    "MCL": 192.755,
+    "NEC": 0.181
+  },
+  "state_production_mt_2022_23": {
+    "Jharkhand": 156.445,
+    "Odisha": 218.981,
+    "Chhattisgarh": 184.895,
+    "Madhya Pradesh": 146.028,
+    "Telangana": 69.637,
+    "Maharashtra": 63.620,
+    "West Bengal": 32.834,
+    "Uttar Pradesh": 20.540,
+    "Assam": 0.200,
+    "Jammu & Kashmir": 0.010
+  },
+  "all_india_production_mt_2022_23": 893.190,
+  "oc_ug_production_mt_2022_23": {"opencast": 858.342, "underground": 34.848},
+  "nlc_lignite_mt_2022_23": 24.491
+}

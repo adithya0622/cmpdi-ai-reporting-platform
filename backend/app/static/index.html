@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CMPDI AI Reporting Platform</title>
+<style>
+  body { font-family: "Segoe UI", sans-serif; margin: 0; background: #f4f5f7; color: #1a2a4a; }
+  header { background: #1a2a4a; color: #fff; padding: 12px 24px; }
+  header h2 { margin: 0; font-size: 18px; }
+  nav { display: flex; gap: 4px; padding: 0 24px; background: #22355c; }
+  nav button { background: none; border: none; color: #cbd5e8; padding: 10px 16px; cursor: pointer; font-size: 14px; }
+  nav button.active { color: #fff; border-bottom: 3px solid #f5a623; }
+  main { padding: 24px; max-width: 1000px; margin: auto; }
+  .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  #kpi_grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  #kpi_grid .kpi { background: #f4f7fb; border: 1px solid #dde6f0; border-radius: 6px; padding: 10px 12px; }
+  #kpi_grid .kpi b { display: block; font-size: 22px; color: #1a2a4a; }
+  #kpi_grid .kpi span { font-size: 12px; color: #5a6b82; }
+  label { font-size: 12px; color: #556; display: block; margin-top: 8px; }
+  input { padding: 8px; margin-top: 2px; width: 100%; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+  button.primary { background: #f5a623; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 600; margin-top: 12px; }
+  button.primary:disabled { opacity: .5; cursor: wait; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+  th { color: #556; }
+  .cloud span { margin: 0 6px; display: inline-block; }
+  .src { color: #666; font-size: 12px; }
+  .hidden { display: none; }
+  pre { white-space: pre-wrap; background: #f8f9fb; padding: 12px; border-radius: 4px; font-size: 13px; }
+  .msg { margin-left: 8px; }
+  h3 { margin-top: 0; }
+</style>
+</head>
+<body>
+<header><h2>CMPDI AI Reporting Platform</h2></header>
+<nav>
+  <button class="active" onclick="show('docs',this)">Documents</button>
+  <button onclick="show('reports',this)">Reports</button>
+  <button onclick="show('analytics',this)">Analytics</button>
+  <button onclick="show('query',this)">Query</button>
+  <button onclick="show('review',this)">Review</button>
+</nav>
+<main>
+  <section id="docs">
+    <div class="card">
+      <h3>Upload document</h3>
+      <label>Title</label><input id="d_title" placeholder="e.g. Monthly Production Report">
+      <label>Subsidiary (ECL / BCCL / CCL / NCL / WCL / SECL / MCL / CMPDIL)</label><input id="d_sub">
+      <label>Year</label><input id="d_year" type="number">
+      <label>File (PDF / DOCX / XLSX / TXT / CSV / image)</label><input id="d_file" type="file">
+      <p><button class="primary" id="d_btn" onclick="uploadDoc()">Upload</button><span id="d_msg" class="msg src"></span></p>
+    </div>
+    <div class="card"><h3>Indexed documents</h3><table id="d_table"><tr><th>Loading...</th></tr></table></div>
+  </section>
+
+  <section id="reports" class="hidden">
+    <div class="card">
+      <h3>Generate report</h3>
+      <label>Title</label><input id="r_title" placeholder="e.g. Quarterly Production Review">
+      <label>Subsidiary (blank = all)</label><input id="r_sub">
+      <label>Year from</label><input id="r_yf" type="number">
+      <label>Year to</label><input id="r_yt" type="number">
+      <button class="primary" id="r_btn" onclick="generateReport()">Generate Word report</button><span id="r_msg" class="msg src"></span>
+    </div>
+    <div class="card"><h3>Generated reports</h3><table id="r_table"><tr><th>Loading...</th></tr></table></div>
+  </section>
+
+  <section id="analytics" class="hidden">
+    <div class="card">
+      <h3>PS Metrics</h3>
+      <div id="kpi_grid">Loading…</div>
+    </div>
+    <div class="card">
+      <h3>Filters</h3>
+      <label>Subsidiary (blank = all)</label><input id="a_sub">
+      <label>Year from / to</label>
+      <div style="display:flex;gap:8px"><input id="a_yf" type="number"><input id="a_yt" type="number"></div>
+      <button class="primary" onclick="runAnalytics()">Run analysis</button>
+    </div>
+    <div class="card"><h3>Word cloud</h3><div id="w_cloud" class="cloud">Run analysis to generate.</div></div>
+    <div class="card"><h3>Top topics</h3><table id="t_table"><tr><th>-</th></tr></table><pre id="t_summary"></pre></div>
+  </section>
+
+  <section id="query" class="hidden">
+    <div class="card">
+      <h3>Ask the corpus (RAG with citations)</h3>
+      <label>Question</label><input id="q_text" placeholder="e.g. What was ECL coal production in 2023?">
+      <label>Subsidiary (blank = all)</label><input id="q_sub">
+      <button class="primary" id="q_btn" onclick="ask()">Ask</button><span id="q_msg" class="msg src"></span>
+    </div>
+    <div class="card hidden" id="q_card"><h3>Answer</h3><pre id="q_answer"></pre><h3>Sources</h3><table id="q_sources"></table></div>
+  </section>
+
+  <section id="review" class="hidden">
+    <div class="card">
+      <h3>Fields needing review</h3>
+      <p class="src">Low-confidence, out-of-range or anomalous extracted values. Confirm or correct them.</p>
+      <table id="v_table"><tr><th>Extract a document first.</th></tr></table>
+    </div>
+  </section>
+</main>
+<script>
+async function api(path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({"X-API-Token": localStorage.getItem("cmpdi_token") || ""}, opts.headers || {});
+  const r = await fetch(path, opts);
+  if (r.status === 401) {
+    const u = prompt("Login required. Username:");
+    if (u) {
+      const p = prompt("Password:");
+      if (p) { await login(u, p); return api(path, opts); }
+    }
+  }
+  if (!r.ok) throw new Error((await r.text()).slice(0, 300));
+  return r.json();
+}
+async function login(u, p) {
+  const r = await fetch("/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) });
+  if (!r.ok) throw new Error("login failed: check username/password");
+  const j = await r.json();
+  localStorage.setItem("cmpdi_token", j.token);
+  localStorage.setItem("cmpdi_role", j.role);
+}
+function show(id, btn) {
+  document.querySelectorAll("main section").forEach(s => s.classList.add("hidden"));
+  document.getElementById(id).classList.remove("hidden");
+  document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  if (id === "docs") loadDocs();
+  if (id === "reports") loadReports();
+  if (id === "review") loadReview();
+  if (id === "analytics") loadKpis();
+}
+function filters(prefix) {
+  return {
+    subsidiary: document.getElementById(prefix + "_sub").value,
+    year_from: document.getElementById(prefix + "_yf").value,
+    year_to: document.getElementById(prefix + "_yt").value,
+  };
+}
+function qs(f) {
+  const p = new URLSearchParams();
+  if (f.subsidiary) p.set("subsidiary", f.subsidiary);
+  if (f.year_from) p.set("year_from", f.year_from);
+  if (f.year_to) p.set("year_to", f.year_to);
+  const s = p.toString();
+  return s ? "?" + s : "";
+}
+
+async function uploadDoc() {
+  const f = document.getElementById("d_file").files[0];
+  if (!f) { document.getElementById("d_msg").textContent = "Choose a file first."; return; }
+  const fd = new FormData();
+  fd.append("file", f);
+  fd.append("title", document.getElementById("d_title").value);
+  fd.append("subsidiary", document.getElementById("d_sub").value);
+  const y = document.getElementById("d_year").value;
+  if (y) fd.append("doc_year", y);
+  const btn = document.getElementById("d_btn"), msg = document.getElementById("d_msg");
+  btn.disabled = true; msg.textContent = "Processing (OCR + indexing)...";
+  try {
+    const j = await api("/documents/upload", { method: "POST", body: fd });
+    msg.textContent = "Queued: " + j.job_id + " (worker will process)";
+    loadDocs();
+  } catch (e) { msg.textContent = "Error: " + e.message; }
+  btn.disabled = false;
+}
+async function loadDocs() {
+  try {
+    const j = await api("/documents");
+    document.getElementById("d_table").innerHTML =
+      "<tr><th>Title</th><th>Subsidiary</th><th>Year</th><th>Status</th><th>Extract</th></tr>" +
+      j.map(d => `<tr><td>${esc(d.title)}</td><td>${esc(d.subsidiary)}</td><td>${d.doc_year ?? ""}</td><td>${d.status}</td><td><a href='#' onclick='extractDoc("${d.id}");return false'>Extract</a></td></tr>`).join("") || "<tr><td>No documents yet.</td></tr>";
+  } catch (e) { document.getElementById("d_table").innerHTML = "<tr><td>" + esc(e.message) + "</td></tr>"; }
+}
+
+async function generateReport() {
+  const btn = document.getElementById("r_btn"), msg = document.getElementById("r_msg");
+  btn.disabled = true; msg.textContent = "Generating...";
+  try {
+    const j = await api("/reports/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: document.getElementById("r_title").value || "Coal India Report",
+        subsidiary: document.getElementById("r_sub").value,
+        year_from: document.getElementById("r_yf").value ? +document.getElementById("r_yf").value : null,
+        year_to: document.getElementById("r_yt").value ? +document.getElementById("r_yt").value : null,
+      }),
+    });
+    msg.innerHTML = "Generated. <a href='#' onclick='downloadReport(\"" + j.id + "\");return false'>Download</a>";
+    loadReports();
+  } catch (e) { msg.textContent = "Error: " + e.message; }
+  btn.disabled = false;
+}
+async function downloadReport(id) {
+  const r = await fetch("/reports/" + id + "/download", { headers: { "X-API-Token": localStorage.getItem("cmpdi_token") || "" } });
+  const b = await r.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(b);
+  a.download = "report.docx";
+  a.click();
+}
+async function loadReports() {
+  try {
+    const j = await api("/reports");
+    document.getElementById("r_table").innerHTML =
+      "<tr><th>Title</th><th>Params</th><th>Created</th><th></th></tr>" +
+      j.map(r => `<tr><td>${esc(r.title)}</td><td>${esc(JSON.stringify(r.params))}</td><td>${new Date(r.created_at).toLocaleString()}</td><td><a href='#' onclick='downloadReport("${r.id}");return false'>Download</a></td></tr>`).join("") || "<tr><td>No reports yet.</td></tr>";
+  } catch (e) { document.getElementById("r_table").innerHTML = "<tr><td>" + esc(e.message) + "</td></tr>"; }
+}
+
+async function loadKpis() {
+  try {
+    const k = await api("/analytics/kpis");
+    const pct = v => v == null ? "—" : v.toFixed(1) + "%";
+    const secs = v => v == null ? "—" : (v < 90 ? v.toFixed(1) + " s" : (v / 3600).toFixed(2) + " h");
+    const evalP = k.eval ? (k.eval.precision * 100).toFixed(1) + "%" : "—";
+    const evalN = k.eval ? k.eval.entries + " gold entries" : "run eval harness";
+    const acc = k.human_triage_agreement_pct == null
+      ? ""
+      : `<div class="kpi"><b>${pct(k.human_triage_agreement_pct)}</b><span>human-AI agreement (${k.fields_confirmed + k.fields_rejected} triaged)</span></div>`;
+    document.getElementById("kpi_grid").innerHTML = `
+      <div class="kpi"><b>${pct(k.automation_pct)}</b><span>automation (${k.fields_auto}/${k.fields_total} fields auto-extracted)</span></div>
+      <div class="kpi"><b>${pct(k.automation_strong_pct)}</b><span>automation (high-confidence ≥${k.confidence_threshold ?? 0.7})</span></div>
+      <div class="kpi"><b>${evalP}</b><span>extraction accuracy (precision, ${evalN})</span></div>
+      <div class="kpi"><b>${secs(k.report_prep_seconds)}</b><span>automated report build (${k.report_prep_time_reduction_pct == null ? "baseline not measured" : "vs manual: -" + k.report_prep_time_reduction_pct + "%"})</span></div>
+      ${acc}
+      <div class="kpi"><b>${k.corpus.documents}</b><span>documents indexed (${k.corpus.vector_chunks}/${k.corpus.chunks} chunks vectorized)</span></div>`;
+  } catch (e) {
+    document.getElementById("kpi_grid").textContent = "Error: " + e.message;
+  }
+}
+
+async function runAnalytics() {
+  const f = filters("a");
+  try {
+    const wc = await api("/analytics/wordcloud" + qs(f));
+    const max = wc.length ? wc[0].count : 1;
+    document.getElementById("w_cloud").innerHTML = wc.map(w =>
+      `<span style="font-size:${(12 + 24 * w.count / max).toFixed(0)}px;color:#1a2a4a">${esc(w.term)}</span>`).join(" ") || "No indexed documents match.";
+    const tp = await api("/analytics/topics" + qs(f));
+    document.getElementById("t_table").innerHTML =
+      "<tr><th>Term</th><th>Count</th></tr>" +
+      tp.topics.map(t => `<tr><td>${esc(t.term)}</td><td>${t.count}</td></tr>`).join("") || "<tr><td>-</td></tr>";
+    document.getElementById("t_summary").textContent = tp.summary || "";
+  } catch (e) { document.getElementById("w_cloud").textContent = "Error: " + e.message; }
+}
+
+async function ask() {
+  const q = document.getElementById("q_text").value;
+  if (!q) return;
+  const btn = document.getElementById("q_btn"), msg = document.getElementById("q_msg");
+  btn.disabled = true; msg.textContent = "Searching + reasoning...";
+  try {
+    const j = await api("/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q, subsidiary: document.getElementById("q_sub").value }),
+    });
+    document.getElementById("q_card").classList.remove("hidden");
+    document.getElementById("q_answer").textContent = j.answer;
+    document.getElementById("q_sources").innerHTML =
+      "<tr><th>Document</th><th>Page</th><th>Subsidiary</th><th>Score</th></tr>" +
+      j.sources.map(s => `<tr><td>${esc(s.title)}</td><td>${s.page}</td><td>${esc(s.subsidiary)}</td><td>${s.score}</td></tr>`).join("") || "<tr><td>-</td></tr>";
+    msg.textContent = "";
+  } catch (e) { msg.textContent = "Error: " + e.message; }
+  btn.disabled = false;
+}
+function esc(s) {
+  const AMP = String.fromCharCode(38), LT = String.fromCharCode(60), GT = String.fromCharCode(62);
+  return String(s ?? "").replace(/&/g, AMP + "amp;").replace(/</g, LT + "lt;").replace(/>/g, GT + "gt;");
+}
+async function loadReview() {
+  try {
+    const j = await api("/extractions/review");
+    document.getElementById("v_table").innerHTML =
+      "<tr><th>Field</th><th>Value</th><th>Conf.</th><th>Document</th><th>Corrected value</th><th></th></tr>" +
+      j.map(f => `<tr><td>${esc(f.field_name)}</td><td>${esc(f.value_num ?? f.value_str)}</td><td>${(f.confidence * 100).toFixed(0)}%</td><td>${esc(f.title)}</td><td><input id="v_${f.id}" style="padding:4px;width:120px"></td><td><a href='#' onclick='reviewField(${f.id},"confirm");return false'>Confirm</a> <a href='#' onclick='reviewField(${f.id},"reject");return false'>Reject</a></td></tr>`).join("") || "<tr><td>Nothing to review.</td></tr>";
+  } catch (e) { document.getElementById("v_table").innerHTML = "<tr><td>" + esc(e.message) + "</td></tr>"; }
+}
+async function extractDoc(id) {
+  const t = prompt("Doc type (production_report / geological / parliamentary_q):", "production_report");
+  if (!t) return;
+  try {
+    const j = await api("/extractions/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ document_id: id, doc_type: t }) });
+    alert("Extraction queued: " + j.run_id);
+  } catch (e) { alert("Error: " + e.message); }
+}
+async function reviewField(id, action) {
+  const body = { action };
+  if (action === "confirm") {
+    const v = document.getElementById("v_" + id).value;
+    if (v !== "") body.value = isNaN(+v) ? v : +v;
+  }
+  try {
+    await api("/extractions/fields/" + id + "/review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    loadReview();
+  } catch (e) { alert("Error: " + e.message); }
+}
+</script>
+</body>
+</html>

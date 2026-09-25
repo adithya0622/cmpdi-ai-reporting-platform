@@ -1,0 +1,58 @@
+{
+  "entries": 53,
+  "precision": 0.984,
+  "recall": 0.984,
+  "per_doc_type": {
+    "production_report": {
+      "runs": 21,
+      "llm_fail": 0,
+      "expected": 70,
+      "extracted": 70,
+      "matched": 69,
+      "precision": 0.986,
+      "recall": 0.986,
+      "f1": 0.986
+    },
+    "geological": {
+      "runs": 9,
+      "llm_fail": 0,
+      "expected": 53,
+      "extracted": 53,
+      "matched": 52,
+      "precision": 0.981,
+      "recall": 0.981,
+      "f1": 0.981
+    },
+    "parliamentary_q": {
+      "runs": 10,
+      "llm_fail": 0,
+      "expected": 27,
+      "extracted": 27,
+      "matched": 26,
+      "precision": 0.963,
+      "recall": 0.963,
+      "f1": 0.963
+    },
+    "daily_shift_report": {
+      "runs": 6,
+      "llm_fail": 0,
+      "expected": 18,
+      "extracted": 18,
+      "matched": 18,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "stoppage_report": {
+      "runs": 7,
+      "llm_fail": 0,
+      "expected": 14,
+      "extracted": 14,
+      "matched": 14,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  },
+  "saved_at": "2026-09-25 18:54:24"
+}
