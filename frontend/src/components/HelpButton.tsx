@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 const HELP: Record<string, { title: string; content: string }> = {
@@ -79,12 +79,48 @@ export default function HelpButton() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const page = HELP[location.pathname] || HELP["/"];
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      closeRef.current?.focus();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+      if (e.key === "Tab") {
+        const modal = document.getElementById("help-dialog");
+        if (!modal) return;
+        const focusable = modal.querySelectorAll<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])");
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
 
   return (
     <>
       <button
+        ref={triggerRef}
         onClick={() => setOpen(true)}
-        title="Help"
+        aria-label="Help"
         style={{
           position: "fixed",
           bottom: 20,
@@ -117,9 +153,13 @@ export default function HelpButton() {
             alignItems: "center",
             justifyContent: "center",
           }}
-          onClick={() => setOpen(false)}
+          onClick={() => { setOpen(false); triggerRef.current?.focus(); }}
         >
           <div
+            id="help-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="help-title"
             style={{
               background: "var(--card-bg, #fff)",
               borderRadius: 8,
@@ -133,8 +173,13 @@ export default function HelpButton() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>{page.title}</h3>
-              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer" }}>
+              <h3 id="help-title" style={{ margin: 0 }}>{page.title}</h3>
+              <button
+                ref={closeRef}
+                onClick={() => { setOpen(false); triggerRef.current?.focus(); }}
+                aria-label="Close help dialog"
+                style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer" }}
+              >
                 X
               </button>
             </div>

@@ -51,11 +51,11 @@ export default function Home() {
     <>
       {err && (
         <div className="page-inner">
-          <div className="card err">{err}</div>
+          <div className="card err" role="alert">{err}</div>
         </div>
       )}
 
-      <section className="hero">
+      <section className="hero" aria-label="Platform overview">
         <h1>CMPDI AI Reporting Platform</h1>
         <p>
           AI-assisted document processing, extraction and reporting for geological, mining and
@@ -71,10 +71,9 @@ export default function Home() {
           {isAdmin && <div className="counter-box"><div className="n">{cJobs}</div><div className="l">Jobs Queued</div></div>}
         </div>
 
-        {/* SIH Live Demo Pitch Walkthrough */}
         <div className="card" style={{ marginTop: 28, background: "linear-gradient(135deg, rgba(47,36,132,0.04) 0%, rgba(250,198,5,0.06) 100%)", border: "1px solid var(--border)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-            <h3 style={{ margin: 0, color: "var(--indigo)" }}>🏆 SIH 2026 Live Pitch &amp; Evaluation Showcase</h3>
+            <h3 style={{ margin: 0, color: "var(--indigo)" }}><span aria-hidden="true">🏆</span> SIH 2026 Live Pitch &amp; Evaluation Showcase</h3>
             <span className="badge badge-sql">CMPDI / Ministry of Coal AI Reporting Platform</span>
           </div>
           <p className="src" style={{ margin: "0 0 16px 0", fontSize: 13, lineHeight: 1.5 }}>
@@ -82,28 +81,28 @@ export default function Home() {
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
             <div style={{ background: "var(--card-bg)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
-              <div style={{ fontSize: 20 }}>💬 1. Parliamentary &amp; Geological Q&amp;A</div>
+              <div style={{ fontSize: 20 }}><span aria-hidden="true">💬</span> 1. Parliamentary &amp; Geological Q&amp;A</div>
               <p className="src" style={{ margin: "6px 0 10px 0" }}>
                 Deterministic figure routing for Lok Sabha / Rajya Sabha &amp; borehole reserves. Sub-10ms response time with zero hallucinations.
               </p>
               <Link to="/query" style={{ color: "var(--indigo)", fontWeight: 600, fontSize: 13, textDecoration: "none" }}>Launch Inquiry System →</Link>
             </div>
             <div style={{ background: "var(--card-bg)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
-              <div style={{ fontSize: 20 }}>📄 2. Automated Official Report (.docx)</div>
+              <div style={{ fontSize: 20 }}><span aria-hidden="true">📄</span> 2. Automated Official Report (.docx)</div>
               <p className="src" style={{ margin: "6px 0 10px 0" }}>
                 13-page Ministry of Coal consolidated report generated in 8.38s (vs 3.5h manual) with instant in-browser preview.
               </p>
               <Link to="/reports" style={{ color: "var(--indigo)", fontWeight: 600, fontSize: 13, textDecoration: "none" }}>Generate &amp; Preview Report →</Link>
             </div>
             <div style={{ background: "var(--card-bg)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
-              <div style={{ fontSize: 20 }}>📊 3. HEMM Downtime Pareto &amp; Analytics</div>
+              <div style={{ fontSize: 20 }}><span aria-hidden="true">📊</span> 3. HEMM Downtime Pareto &amp; Analytics</div>
               <p className="src" style={{ margin: "6px 0 10px 0" }}>
                 Equipment stoppage reason Pareto charts, machine utilization (EWH/TWH), and mining vocabulary word clouds.
               </p>
               <Link to="/analytics" style={{ color: "var(--indigo)", fontWeight: 600, fontSize: 13, textDecoration: "none" }}>View Operations Analytics →</Link>
             </div>
             <div style={{ background: "var(--card-bg)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
-              <div style={{ fontSize: 20 }}>🛡️ 4. Traceability &amp; Triage Review Queue</div>
+              <div style={{ fontSize: 20 }}><span aria-hidden="true">🛡️</span> 4. Traceability &amp; Triage Review Queue</div>
               <p className="src" style={{ margin: "6px 0 10px 0" }}>
                 Z-score anomaly detection (|z| &gt; 3) and human-in-the-loop review queue feeding self-improving Phase D LoRA fine-tuning.
               </p>
@@ -131,6 +130,10 @@ export default function Home() {
           <div className="card">
             <h3>Recent Documents</h3>
             <table>
+              <caption className="sr-only">Recently indexed documents</caption>
+              <thead>
+                <tr><th scope="col">Title</th><th scope="col">Status</th></tr>
+              </thead>
               <tbody>
                 {docs.map((d) => (
                   <tr key={d.id}>
@@ -138,7 +141,7 @@ export default function Home() {
                     <td className="src">{d.status}</td>
                   </tr>
                 ))}
-                {!docs.length && <tr><td>No documents yet — upload some.</td></tr>}
+                {!docs.length && <tr><td colSpan={2}>No documents yet — upload some.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -163,13 +166,13 @@ export default function Home() {
         </div>
       </div>
 
-      <section className="quick-apps" style={{ marginTop: 32 }}>
+      <section className="quick-apps" style={{ marginTop: 32 }} aria-label="Quick application launchers">
         <div className="quick-apps-inner">
           <h2 className="section-title">Quick Apps</h2>
           <div className="qa-grid">
             {QUICK_APPS.map((q) => (
               <Link key={q.to + q.label} to={q.to} className="qa-tile">
-                <div className="icon">{q.icon}</div>
+                <div className="icon" aria-hidden="true">{q.icon}</div>
                 <div className="label">{q.label}</div>
               </Link>
             ))}

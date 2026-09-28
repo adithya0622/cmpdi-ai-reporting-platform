@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { isLoggedIn } from "./api";
 import Admin from "./pages/Admin";
 import Analytics from "./pages/Analytics";
@@ -13,6 +13,30 @@ import Documents from "./pages/Documents";
 import Login from "./pages/Login";
 import HelpButton from "./components/HelpButton";
 import UtilityBar from "./components/UtilityBar";
+
+const PAGE_TITLES: Record<string, string> = {
+  "/": "Home",
+  "/documents": "Documents",
+  "/review": "Review",
+  "/reports": "Reports",
+  "/analytics": "Analytics",
+  "/query": "Query",
+  "/admin": "Admin",
+  "/login": "Login",
+};
+
+function RouteAnnouncer() {
+  const location = useLocation();
+  const [announcement, setAnnouncement] = useState("");
+  useEffect(() => {
+    setAnnouncement(`Navigated to ${PAGE_TITLES[location.pathname] || "page"}`);
+  }, [location.pathname]);
+  return (
+    <div aria-live="assertive" aria-atomic="true" className="sr-only">
+      {announcement}
+    </div>
+  );
+}
 
 export default function App() {
   const [authed, setAuthed] = useState(isLoggedIn());
@@ -50,17 +74,20 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login onLogin={() => setAuthed(true)} />} />
-      <Route path="/" element={guard(<Home />)} />
-      <Route path="/dashboard" element={<Navigate to="/" replace />} />
-      <Route path="/documents" element={guard(<Documents />)} />
-      <Route path="/review" element={guard(<Review />)} />
-      <Route path="/reports" element={guard(<Reports />)} />
-      <Route path="/analytics" element={guard(<Analytics />)} />
-      <Route path="/query" element={guard(<Query />)} />
-      <Route path="/admin" element={guard(<Admin />)} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <RouteAnnouncer />
+      <Routes>
+        <Route path="/login" element={<Login onLogin={() => setAuthed(true)} />} />
+        <Route path="/" element={guard(<Home />)} />
+        <Route path="/dashboard" element={<Navigate to="/" replace />} />
+        <Route path="/documents" element={guard(<Documents />)} />
+        <Route path="/review" element={guard(<Review />)} />
+        <Route path="/reports" element={guard(<Reports />)} />
+        <Route path="/analytics" element={guard(<Analytics />)} />
+        <Route path="/query" element={guard(<Query />)} />
+        <Route path="/admin" element={guard(<Admin />)} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

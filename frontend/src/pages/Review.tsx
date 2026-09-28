@@ -33,10 +33,11 @@ export default function Review() {
       <div className="card">
         <h3>Fields needing review & approval</h3>
       <p className="src">Low-confidence, out-of-range or anomalous extracted values. Confirm or correct them - confirmed fields record the approver's sign-off.</p>
-      
+
       <div style={{ margin: "14px 0", display: "flex", alignItems: "center", gap: 10, background: "rgba(99, 102, 241, 0.08)", padding: 10, borderRadius: 6 }}>
-        <label style={{ margin: 0, fontWeight: 600, minWidth: 120 }}>Approving Officer:</label>
+        <label htmlFor="review-approver" style={{ margin: 0, fontWeight: 600, minWidth: 120 }}>Approving Officer:</label>
         <input
+          id="review-approver"
           style={{ maxWidth: 350, padding: "6px 10px" }}
           value={approverName}
           onChange={(e) => setApproverName(e.target.value)}
@@ -45,9 +46,10 @@ export default function Review() {
         <span style={{ fontSize: "0.8rem", color: "#64748b" }}>Recorded upon field confirmation</span>
       </div>
 
-      {err && <p className="err">{err}</p>}
+      {err && <p className="err" role="alert">{err}</p>}
       <table>
-        <thead><tr><th>Field</th><th>Value</th><th>Conf.</th><th>Document</th><th>Corrected value</th><th>Actions</th></tr></thead>
+        <caption className="sr-only">Extracted fields pending human review</caption>
+        <thead><tr><th scope="col">Field</th><th scope="col">Value</th><th scope="col">Conf.</th><th scope="col">Document</th><th scope="col">Corrected value</th><th scope="col">Actions</th></tr></thead>
         <tbody>
           {items.map((f) => (
             <tr key={f.id}>
@@ -60,15 +62,16 @@ export default function Review() {
                   style={{ padding: 4, width: 130 }}
                   value={values[f.id] ?? ""}
                   onChange={(e) => setValues({ ...values, [f.id]: e.target.value })}
+                  aria-label={`Corrected value for ${f.field_name}`}
                 />
               </td>
               <td>
-                <button className="small" onClick={() => act(f.id, "confirm")}>Confirm</button>
-                <button className="small" onClick={() => act(f.id, "reject")}>Reject</button>
+                <button className="small" onClick={() => act(f.id, "confirm")} aria-label={`Confirm ${f.field_name}`}>Confirm</button>
+                <button className="small" onClick={() => act(f.id, "reject")} aria-label={`Reject ${f.field_name}`}>Reject</button>
               </td>
             </tr>
           ))}
-          {!items.length && <tr><td>Nothing to review.</td></tr>}
+          {!items.length && <tr><td colSpan={6}>Nothing to review.</td></tr>}
         </tbody>
       </table>
       </div>

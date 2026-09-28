@@ -10,13 +10,15 @@ export default function Footer() {
             AI-assisted geological, mining and production intelligence for CMPDI/CIL subsidiaries.
           </p>
         </div>
-        <div>
+        <nav aria-label="Footer navigation">
           <h4>Quick Links</h4>
-          <NavLink to="/documents">Documents</NavLink>
-          <NavLink to="/reports">Reports</NavLink>
-          <NavLink to="/analytics">Analytics</NavLink>
-          <NavLink to="/query">Ask the Corpus</NavLink>
-        </div>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            <li><NavLink to="/documents">Documents</NavLink></li>
+            <li><NavLink to="/reports">Reports</NavLink></li>
+            <li><NavLink to="/analytics">Analytics</NavLink></li>
+            <li><NavLink to="/query">Ask the Corpus</NavLink></li>
+          </ul>
+        </nav>
         <div>
           <h4>Platform</h4>
           <span>Version 0.3.0</span>

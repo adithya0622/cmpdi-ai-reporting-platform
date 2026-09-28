@@ -37,11 +37,21 @@ const NAV: NavItem[] = [
 
 export default function Header() {
   const [open, setOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const role = getRole();
   const items: NavItem[] =
     role === "admin"
       ? [...NAV, { label: "Admin", children: [{ to: "/admin", label: "Users & Jobs" }, { to: "/admin", label: "Audit Log" }, { to: "/admin", label: "System Health" }] }]
       : NAV;
+
+  function handleDropdownKey(e: React.KeyboardEvent, label: string) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setOpenDropdown(openDropdown === label ? null : label);
+    } else if (e.key === "Escape") {
+      setOpenDropdown(null);
+    }
+  }
 
   return (
     <header className="site-header">
@@ -53,11 +63,17 @@ export default function Header() {
             <span>AI-assisted geological & mining intelligence</span>
           </div>
         </NavLink>
-        <button className="nav-toggle" onClick={() => setOpen(!open)} aria-label="Toggle navigation">
+        <button
+          className="nav-toggle"
+          onClick={() => setOpen(!open)}
+          aria-label="Toggle navigation"
+          aria-expanded={open}
+          aria-controls="primary-nav"
+        >
           ☰
         </button>
-        <nav className={"nav" + (open ? " open" : "")}>
-          <ul>
+        <nav className={"nav" + (open ? " open" : "")} aria-label="Main navigation">
+          <ul id="primary-nav">
             {items.map((item) =>
               item.to ? (
                 <li key={item.label}>
@@ -67,8 +83,18 @@ export default function Header() {
                 </li>
               ) : (
                 <li key={item.label}>
-                  <span className="nav-link" tabIndex={0}>{item.label}</span>
-                  <ul className="dropdown-menu">
+                  <span
+                    className="nav-link"
+                    tabIndex={0}
+                    role="button"
+                    aria-haspopup="true"
+                    aria-expanded={openDropdown === item.label}
+                    onClick={() => setOpenDropdown(openDropdown === item.label ? null : item.label)}
+                    onKeyDown={(e) => handleDropdownKey(e, item.label)}
+                  >
+                    {item.label}
+                  </span>
+                  <ul className="dropdown-menu" style={openDropdown === item.label ? { display: "block" } : undefined}>
                     {(item.children || []).map((c, i) => (
                       <li key={i}>
                         <NavLink to={c.to}>{c.label}</NavLink>

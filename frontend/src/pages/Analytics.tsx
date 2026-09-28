@@ -39,12 +39,10 @@ export default function Analytics() {
   const [topicTrends, setTopicTrends] = useState<any[]>([]);
   const [err, setErr] = useState("");
 
-  // recommendations state
   const [recs, setRecs] = useState<any | null>(null);
   const [recsLoading, setRecsLoading] = useState(false);
   const [recsErr, setRecsErr] = useState("");
 
-  // daily operations state
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [pareto, setPareto] = useState<any | null>(null);
@@ -126,7 +124,7 @@ export default function Analytics() {
     <div className="page-inner">
       <div className="card">
         <h3>PS Metrics</h3>
-        {!kpis && <p className="src">Loading metrics…</p>}
+        {!kpis && <p className="src" role="status" aria-live="polite">Loading metrics…</p>}
         {kpis && (
           <div className="kpis" style={{ marginBottom: 0 }}>
             <div className="kpi"><div className="n">{kpis.automation_pct}%</div><div className="l">automation — {kpis.fields_auto}/{kpis.fields_total} fields auto-extracted</div></div>
@@ -155,7 +153,8 @@ export default function Analytics() {
         <button className="primary" onClick={loadRecs} disabled={recsLoading}>
           {recsLoading ? "Analyzing..." : "Generate Recommendations"}
         </button>
-        {recsErr && <span className="msg err">{recsErr}</span>}
+        {recsErr && <span className="msg err" role="alert">{recsErr}</span>}
+        {recsLoading && <span className="sr-only" role="status">Generating AI recommendations, please wait.</span>}
         {recs && recs.recommendations && (
           <div style={{ marginTop: 12 }}>
             {recs.recommendations.map((r: any, idx: number) => {
@@ -180,65 +179,68 @@ export default function Analytics() {
 
       <div className="card">
         <h3>Filters</h3>
-        <label>Subsidiary (blank = all)</label>
-        <input value={subsidiary} onChange={(e) => setSubsidiary(e.target.value)} />
-        <label>Year from / to</label>
+        <label htmlFor="analytics-sub">Subsidiary (blank = all)</label>
+        <input id="analytics-sub" value={subsidiary} onChange={(e) => setSubsidiary(e.target.value)} />
+        <label htmlFor="analytics-yf">Year from / to</label>
         <div style={{ display: "flex", gap: 8 }}>
-          <input type="number" value={yf} onChange={(e) => setYf(e.target.value)} />
-          <input type="number" value={yt} onChange={(e) => setYt(e.target.value)} />
+          <input id="analytics-yf" type="number" value={yf} onChange={(e) => setYf(e.target.value)} />
+          <input id="analytics-yt" aria-label="Year to" type="number" value={yt} onChange={(e) => setYt(e.target.value)} />
         </div>
         <button className="primary" onClick={run}>Run analysis</button>
-        {err && <span className="msg err">{err}</span>}
+        {err && <span className="msg err" role="alert">{err}</span>}
       </div>
 
       <div className="card">
         <h3>Daily operations — stoppages &amp; machine utilization</h3>
-        <label>Date from / to (YYYY-MM-DD, blank = all)</label>
+        <label htmlFor="ops-date-from">Date from / to (YYYY-MM-DD, blank = all)</label>
         <div style={{ display: "flex", gap: 8 }}>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          <input id="ops-date-from" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          <input id="ops-date-to" aria-label="Date to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </div>
         <button className="primary" onClick={runDailyOps} disabled={opsBusy}>
           {opsBusy ? "Loading…" : "Load daily operations"}
         </button>
-        {opsErr && <span className="msg err">{opsErr}</span>}
+        {opsErr && <span className="msg err" role="alert">{opsErr}</span>}
+        {opsBusy && <span className="sr-only" role="status">Loading daily operations data.</span>}
         {pareto && (
           <>
             <p className="src">
               Total downtime <b>{pareto.total_stoppage_h} h</b> across {pareto.stoppage_events} stoppage events.
             </p>
 
-            {/* Interactive Bar Chart for Pareto */}
             {pareto.categories && pareto.categories.length > 0 && (
               <div style={{ marginTop: 16, marginBottom: 16 }}>
                 <h4 style={{ margin: "0 0 10px 0" }}>HEMM Downtime Hours by Stoppage Reason</h4>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={pareto.categories} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
-                    <XAxis
-                      dataKey="category"
-                      angle={-20}
-                      textAnchor="end"
-                      interval={0}
-                      tick={{ fontSize: 11 }}
-                    />
-                    <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 12 }} />
-                    <Tooltip
-                      formatter={(val: any) => [`${val} hrs`, "Downtime"]}
-                      labelFormatter={(label) => `Category: ${label}`}
-                    />
-                    <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
-                      {pareto.categories.map((_: any, index: number) => {
-                        const colors = ["#e74c3c", "#e67e22", "#f39c12", "#2980b9", "#8e44ad", "#16a085", "#7f8c8d"];
-                        return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
-                      })}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <div role="img" aria-label="Bar chart showing HEMM downtime hours by stoppage reason category">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={pareto.categories} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
+                      <XAxis
+                        dataKey="category"
+                        angle={-20}
+                        textAnchor="end"
+                        interval={0}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 12 }} />
+                      <Tooltip
+                        formatter={(val: any) => [`${val} hrs`, "Downtime"]}
+                        labelFormatter={(label) => `Category: ${label}`}
+                      />
+                      <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
+                        {pareto.categories.map((_: any, index: number) => {
+                          const colors = ["#e74c3c", "#e67e22", "#f39c12", "#2980b9", "#8e44ad", "#16a085", "#7f8c8d"];
+                          return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
 
             <table style={{ marginTop: 8 }}>
-              <thead><tr><th>Stoppage category</th><th>Hours</th><th>Share</th><th>Cumulative</th></tr></thead>
+              <caption className="sr-only">Stoppage categories with hours, share, and cumulative percentages</caption>
+              <thead><tr><th scope="col">Stoppage category</th><th scope="col">Hours</th><th scope="col">Share</th><th scope="col">Cumulative</th></tr></thead>
               <tbody>
                 {pareto.categories.map((c: any) => (
                   <tr key={c.category}>
@@ -248,13 +250,14 @@ export default function Analytics() {
                     <td><b>{c.cumulative_pct}%</b></td>
                   </tr>
                 ))}
-                {!pareto.categories.length && <tr><td>No stoppage data extracted yet.</td></tr>}
+                {!pareto.categories.length && <tr><td colSpan={4}>No stoppage data extracted yet.</td></tr>}
               </tbody>
             </table>
 
             <h4 style={{ marginTop: 24, marginBottom: 8 }}>Heavy Equipment Utilization (EWH / TWH)</h4>
             <table>
-              <thead><tr><th>Machine ID</th><th>TWH (h)</th><th>EWH (h)</th><th>Util %</th><th>Output (t)</th><th>Days Reported</th><th>Status</th></tr></thead>
+              <caption className="sr-only">Machine utilization showing TWH, EWH, utilization percentage, output, and status</caption>
+              <thead><tr><th scope="col">Machine ID</th><th scope="col">TWH (h)</th><th scope="col">EWH (h)</th><th scope="col">Util %</th><th scope="col">Output (t)</th><th scope="col">Days Reported</th><th scope="col">Status</th></tr></thead>
               <tbody>
                 {util.map((m) => {
                   const u = m.utilization_pct;
@@ -282,19 +285,21 @@ export default function Analytics() {
 
       <div className="card">
         <h3>Production trend (extracted figures)</h3>
-        <label>Field</label>
-        <select value={trendField} onChange={(e) => setTrendField(e.target.value)}>
+        <label htmlFor="trend-field">Field</label>
+        <select id="trend-field" value={trendField} onChange={(e) => setTrendField(e.target.value)}>
           {FIELDS.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
         <div style={{ marginTop: 12 }}>
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={trends}>
-              <XAxis dataKey="year" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="value" stroke="#f5a623" strokeWidth={2} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
+          <div role="img" aria-label={`Line chart showing ${trendField} production trend over years`}>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={trends}>
+                <XAxis dataKey="year" />
+                <YAxis />
+                <Tooltip />
+                <Line type="monotone" dataKey="value" stroke="#f5a623" strokeWidth={2} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
           {!trends.length && <p className="src">No extracted figures yet - run extractions first.</p>}
         </div>
       </div>
@@ -312,12 +317,13 @@ export default function Analytics() {
       <div className="card">
         <h3>Top topics</h3>
         <table>
-          <thead><tr><th>Term</th><th>Count</th></tr></thead>
+          <caption className="sr-only">Top topics extracted by TF-IDF with term counts</caption>
+          <thead><tr><th scope="col">Term</th><th scope="col">Count</th></tr></thead>
           <tbody>
             {topics.map((t) => (
               <tr key={t.term}><td>{t.term}</td><td>{t.count}</td></tr>
             ))}
-            {!topics.length && <tr><td>-</td></tr>}
+            {!topics.length && <tr><td colSpan={2}>-</td></tr>}
           </tbody>
         </table>
         {summary && <pre>{summary}</pre>}

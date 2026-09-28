@@ -24,20 +24,20 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   }
 
   return (
-    <div className="login-wrap">
+    <main className="login-wrap">
       <div className="card">
-        <h3>CMPDI AI Reporting Platform</h3>
+        <h1 style={{ fontSize: 22, marginTop: 0 }}>CMPDI AI Reporting Platform</h1>
         <form onSubmit={submit}>
-          <label>Username</label>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
-          <label>Password</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <label htmlFor="login-user">Username</label>
+          <input id="login-user" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus required autoComplete="username" />
+          <label htmlFor="login-pass">Password</label>
+          <input id="login-pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
           <button className="primary" disabled={busy || !username || !password}>
             {busy ? "Logging in..." : "Login"}
           </button>
-          {err && <p className="err">{err}</p>}
+          {err && <p className="err" role="alert">{err}</p>}
         </form>
       </div>
-    </div>
+    </main>
   );
 }

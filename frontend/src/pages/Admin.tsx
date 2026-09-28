@@ -62,8 +62,8 @@ export default function Admin() {
 
   return (
     <div className="page-inner">
-      {err && <div className="card err">{err}</div>}
-      {msg && <div className="card src">{msg}</div>}
+      {err && <div className="card err" role="alert">{err}</div>}
+      {msg && <div className="card src" role="status">{msg}</div>}
       {overview && (
         <div className="kpis" style={{ marginBottom: 16 }}>
           <div className="kpi"><div className="n">{overview.users}</div><div className="l">Users</div></div>
@@ -89,8 +89,9 @@ export default function Admin() {
           </div>
           {(dq.flagged_anomalies || []).length > 0 && (
             <table>
+              <caption className="sr-only">Data quality anomalies flagged for review</caption>
               <thead>
-                <tr><th>Document</th><th>Field</th><th>Value</th><th>Confidence</th></tr>
+                <tr><th scope="col">Document</th><th scope="col">Field</th><th scope="col">Value</th><th scope="col">Confidence</th></tr>
               </thead>
               <tbody>
                 {dq.flagged_anomalies.slice(0, 8).map((a: any, i: number) => (
@@ -108,33 +109,33 @@ export default function Admin() {
       )}
       <div className="card">
         <h3>Create user</h3>
-        <label>Username / Password</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} />
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        </div>
-        <label>Role / Subsidiary (blank = all)</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          <select value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="viewer">viewer</option>
-            <option value="analyst">analyst</option>
-            <option value="admin">admin</option>
-          </select>
-          <input value={subsidiary} onChange={(e) => setSubsidiary(e.target.value)} />
-        </div>
+        <label htmlFor="admin-username">Username</label>
+        <input id="admin-username" value={username} onChange={(e) => setUsername(e.target.value)} />
+        <label htmlFor="admin-password">Password</label>
+        <input id="admin-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <label htmlFor="admin-role">Role</label>
+        <select id="admin-role" value={role} onChange={(e) => setRole(e.target.value)}>
+          <option value="viewer">viewer</option>
+          <option value="analyst">analyst</option>
+          <option value="admin">admin</option>
+        </select>
+        <label htmlFor="admin-subsidiary">Subsidiary (blank = all)</label>
+        <input id="admin-subsidiary" value={subsidiary} onChange={(e) => setSubsidiary(e.target.value)} />
         <button className="primary" disabled={!username || !password} onClick={createUser}>Create</button>
       </div>
       <div className="card">
         <h3>Users</h3>
         <table>
-          <thead><tr><th>Username</th><th>Role</th><th>Subsidiary</th></tr></thead>
+          <caption className="sr-only">Registered platform users</caption>
+          <thead><tr><th scope="col">Username</th><th scope="col">Role</th><th scope="col">Subsidiary</th></tr></thead>
           <tbody>{users.map((u) => <tr key={u.username}><td>{u.username}</td><td>{u.role}</td><td>{u.subsidiary}</td></tr>)}</tbody>
         </table>
       </div>
       <div className="card">
         <h3>Jobs</h3>
         <table>
-          <thead><tr><th>Kind</th><th>Status</th><th>Error</th><th>Created</th><th></th></tr></thead>
+          <caption className="sr-only">Background processing jobs</caption>
+          <thead><tr><th scope="col">Kind</th><th scope="col">Status</th><th scope="col">Error</th><th scope="col">Created</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>
             {jobs.map((j) => (
               <tr key={j.id}>
@@ -142,17 +143,18 @@ export default function Admin() {
                 <td>{j.status}</td>
                 <td className="err">{j.error ? String(j.error).slice(0, 80) : ""}</td>
                 <td>{new Date(j.created_at).toLocaleString()}</td>
-                <td>{j.status === "failed" && <button className="small" onClick={() => retry(j.id)}>Retry</button>}</td>
+                <td>{j.status === "failed" && <button className="small" onClick={() => retry(j.id)} aria-label={`Retry ${j.kind} job`}>Retry</button>}</td>
               </tr>
             ))}
-            {!jobs.length && <tr><td>No jobs yet.</td></tr>}
+            {!jobs.length && <tr><td colSpan={5}>No jobs yet.</td></tr>}
           </tbody>
         </table>
       </div>
       <div className="card">
         <h3>Query log (faithfulness monitor)</h3>
         <table>
-          <thead><tr><th>Question</th><th>User</th><th>Mode</th><th>Latency</th><th>Grounded</th><th>Feedback</th></tr></thead>
+          <caption className="sr-only">Query log with faithfulness and feedback metrics</caption>
+          <thead><tr><th scope="col">Question</th><th scope="col">User</th><th scope="col">Mode</th><th scope="col">Latency</th><th scope="col">Grounded</th><th scope="col">Feedback</th></tr></thead>
           <tbody>
             {queries.map((q) => (
               <tr key={q.id}>
@@ -161,17 +163,18 @@ export default function Admin() {
                 <td>{q.mode}</td>
                 <td>{q.latency_ms} ms</td>
                 <td>{q.grounded_pct != null ? (q.grounded_pct * 100).toFixed(0) + "%" : "-"}</td>
-                <td>{q.rating === 1 ? "👍" : q.rating === -1 ? "👎" : "-"}</td>
+                <td>{q.rating === 1 ? <span aria-label="Positive feedback">👍</span> : q.rating === -1 ? <span aria-label="Negative feedback">👎</span> : "-"}</td>
               </tr>
             ))}
-            {!queries.length && <tr><td>No queries yet.</td></tr>}
+            {!queries.length && <tr><td colSpan={6}>No queries yet.</td></tr>}
           </tbody>
         </table>
       </div>
       <div className="card">
         <h3>Audit log</h3>
         <table>
-          <thead><tr><th>When</th><th>User</th><th>Action</th><th>Detail</th></tr></thead>
+          <caption className="sr-only">System audit trail</caption>
+          <thead><tr><th scope="col">When</th><th scope="col">User</th><th scope="col">Action</th><th scope="col">Detail</th></tr></thead>
           <tbody>
             {audit.map((a) => (
               <tr key={a.id}>
@@ -181,7 +184,7 @@ export default function Admin() {
                 <td className="src">{JSON.stringify(a.detail).slice(0, 100)}</td>
               </tr>
             ))}
-            {!audit.length && <tr><td>No audit entries yet.</td></tr>}
+            {!audit.length && <tr><td colSpan={4}>No audit entries yet.</td></tr>}
           </tbody>
         </table>
       </div>

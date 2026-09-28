@@ -96,19 +96,19 @@ export default function Documents() {
     <div className="page-inner">
       <div className="card">
         <h3>Upload document</h3>
-        <label>Title</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Monthly Production Report" />
-        <label>Subsidiary (ECL / BCCL / CCL / NCL / WCL / SECL / MCL / CMPDIL)</label>
-        <input value={subsidiary} onChange={(e) => setSubsidiary(e.target.value)} />
-        <label>Year</label>
-        <input type="number" value={year} onChange={(e) => setYear(e.target.value)} />
-        <label>Report date (for daily ops reports; blank = auto-detect from filename)</label>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <label>File (PDF / DOCX / XLSX / TXT / CSV / image)</label>
-        <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <label htmlFor="doc-title">Title</label>
+        <input id="doc-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Monthly Production Report" />
+        <label htmlFor="doc-sub">Subsidiary (ECL / BCCL / CCL / NCL / WCL / SECL / MCL / CMPDIL)</label>
+        <input id="doc-sub" value={subsidiary} onChange={(e) => setSubsidiary(e.target.value)} />
+        <label htmlFor="doc-year">Year</label>
+        <input id="doc-year" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
+        <label htmlFor="doc-date">Report date (for daily ops reports; blank = auto-detect from filename)</label>
+        <input id="doc-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <label htmlFor="doc-file">File (PDF / DOCX / XLSX / TXT / CSV / image)</label>
+        <input id="doc-file" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
         <button className="primary" disabled={busy || !file} onClick={upload}>Upload</button>
-        {msg && <span className="msg src">{msg}</span>}
-        {err && <span className="msg err">{err}</span>}
+        {msg && <span className="msg src" role="status">{msg}</span>}
+        {err && <span className="msg err" role="alert">{err}</span>}
       </div>
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -125,22 +125,23 @@ export default function Documents() {
             onClick={approveAll}
             disabled={busy}
           >
-            ✓ Approve All Documents
+            <span aria-hidden="true">✓</span> Approve All Documents
           </button>
         </div>
-        <label style={{ marginTop: 12 }}>Filter by subsidiary</label>
-        <input value={filterSub} onChange={(e) => setFilterSub(e.target.value)} />
+        <label htmlFor="doc-filter-sub" style={{ marginTop: 12 }}>Filter by subsidiary</label>
+        <input id="doc-filter-sub" value={filterSub} onChange={(e) => setFilterSub(e.target.value)} />
         <table style={{ marginTop: 8 }}>
+          <caption className="sr-only">Indexed documents with status and actions</caption>
           <thead>
             <tr>
-              <th>Title</th>
-              <th>Subsidiary</th>
-              <th>Year</th>
-              <th>Date</th>
-              <th>Specified By</th>
-              <th>Approved By</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th scope="col">Title</th>
+              <th scope="col">Subsidiary</th>
+              <th scope="col">Year</th>
+              <th scope="col">Date</th>
+              <th scope="col">Specified By</th>
+              <th scope="col">Approved By</th>
+              <th scope="col">Status</th>
+              <th scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -163,7 +164,6 @@ export default function Documents() {
                         fontSize: "0.8rem",
                         fontWeight: 600,
                       }}
-                      title="Shift In-Charge / Overman who specified operational targets"
                     >
                       {d.specified_by}
                     </span>
@@ -185,10 +185,13 @@ export default function Documents() {
                         fontWeight: 600,
                         cursor: "pointer",
                       }}
-                      title="Click to edit approver"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Edit approver for ${d.title}`}
                       onClick={() => approveShift(d.id, d.title, d.approved_by)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); approveShift(d.id, d.title, d.approved_by); } }}
                     >
-                      ✓ {d.approved_by}
+                      <span aria-hidden="true">✓</span> {d.approved_by}
                     </span>
                   ) : (
                     <button
@@ -202,9 +205,9 @@ export default function Documents() {
                 </td>
                 <td>{d.status}</td>
                 <td style={{ display: "flex", gap: 6 }}>
-                  <button className="small" onClick={() => extract(d.id)}>Extract</button>
+                  <button className="small" onClick={() => extract(d.id)} aria-label={`Extract fields from ${d.title}`}>Extract</button>
                   {!d.approved_by && (
-                    <button className="small" onClick={() => approveShift(d.id, d.title)}>Approve</button>
+                    <button className="small" onClick={() => approveShift(d.id, d.title)} aria-label={`Approve ${d.title}`}>Approve</button>
                   )}
                 </td>
               </tr>

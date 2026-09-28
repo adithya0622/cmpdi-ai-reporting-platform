@@ -15,61 +15,61 @@ type Msg = {
 const PRESETS = [
   {
     tag: "Shift Sign-off & Approver",
-    label: "⏱️ Who approved shift on 08.09.2026? (Shift Sign-off)",
+    label: "Who approved shift on 08.09.2026? (Shift Sign-off)",
     q: "Who approved the shift on 08.09.2026 and what were the production figures?",
     sub: "",
   },
   {
     tag: "Stoppage Report Sign-off",
-    label: "🚜 Mine-1 stoppage report approver (07.09.2026)",
+    label: "Mine-1 stoppage report approver (07.09.2026)",
     q: "Who approved the stoppage report on 07.09.2026 for Mine-1?",
     sub: "",
   },
   {
     tag: "Lok Sabha AU5084",
-    label: "🏛️ Coal production trends in Odisha (AU5084)",
+    label: "Coal production trends in Odisha (AU5084)",
     q: "What was the coal production trend in Odisha according to Lok Sabha question 5084?",
     sub: "",
   },
   {
     tag: "Borehole Exploration",
-    label: "⛏️ Borehole BH-21 reserves & depth (CMPDI)",
+    label: "Borehole BH-21 reserves & depth (CMPDI)",
     q: "What are the estimated coal reserves, seams, and depths for borehole BH-21?",
     sub: "CMPDI",
   },
   {
     tag: "Production Figures",
-    label: "📊 BCCL 2024 quarterly production (Deterministic SQL)",
+    label: "BCCL 2024 quarterly production (Deterministic SQL)",
     q: "What was the quarterly coal production of BCCL in 2024?",
     sub: "BCCL",
   },
   {
     tag: "Equipment Downtime",
-    label: "🚜 BWE-1029 equipment stoppage causes (HEMM)",
+    label: "BWE-1029 equipment stoppage causes (HEMM)",
     q: "What were the primary stoppage reasons and downtime hours for excavator BWE-1029?",
     sub: "NLC",
   },
   {
     tag: "National Inventory",
-    label: "📋 National Coal Inventory & Reserve Estimates 2025",
+    label: "National Coal Inventory & Reserve Estimates 2025",
     q: "What are the total confirmed and indicated coal reserves reported in the National Inventory 2025?",
     sub: "",
   },
   {
     tag: "Rajya Sabha 2668",
-    label: "🏛️ Critical mineral exploration (Rajya Sabha 2668)",
+    label: "Critical mineral exploration (Rajya Sabha 2668)",
     q: "What are the exploration replies regarding critical mineral and coal blocks in Rajya Sabha question 2668?",
     sub: "",
   },
   {
     tag: "Hindi Query",
-    label: "🇮🇳 भारत की कुल कोयला भंडार संख्या क्या है? (Hindi)",
+    label: "भारत की कुल कोयला भंडार संख्या क्या है? (Hindi)",
     q: "भारत की कुल कोयला भंडार संख्या क्या है?",
     sub: "",
   },
   {
     tag: "Hindi Query",
-    label: "🇮🇳 2024 में BCCL का कोयला उत्पादन कितना था? (Hindi)",
+    label: "2024 में BCCL का कोयला उत्पादन कितना था? (Hindi)",
     q: "2024 में BCCL का कोयला उत्पादन कितना था?",
     sub: "BCCL",
   },
@@ -176,17 +176,19 @@ export default function Query() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 3fr", gap: 12, marginTop: 8 }}>
           <div>
-            <label>Subsidiary Filter</label>
+            <label htmlFor="query-sub">Subsidiary Filter</label>
             <input
+              id="query-sub"
               value={subsidiary}
               onChange={(e) => setSubsidiary(e.target.value)}
               placeholder="e.g. BCCL, ECL, CMPDI"
             />
           </div>
           <div>
-            <label>Question / Inquiry</label>
+            <label htmlFor="query-q">Question / Inquiry</label>
             <div style={{ display: "flex", gap: 8 }}>
               <input
+                id="query-q"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && ask()}
@@ -199,9 +201,9 @@ export default function Query() {
           </div>
         </div>
 
-        {err && <p className="err">{err}</p>}
+        {err && <p className="err" role="alert">{err}</p>}
 
-        <div className="chat" style={{ marginTop: 24 }}>
+        <div className="chat" style={{ marginTop: 24 }} role="log" aria-live="polite">
           {messages.map((m, i) => (
             <div key={i} className={`bubble ${m.role}`}>
               <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{m.content}</div>
@@ -209,18 +211,18 @@ export default function Query() {
               {m.role === "bot" && (
                 <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   {m.mode === "figures" ? (
-                    <span className="badge badge-sql">⚡ Deterministic SQL Query (Zero Hallucination)</span>
+                    <span className="badge badge-sql"><span aria-hidden="true">⚡</span> Deterministic SQL Query (Zero Hallucination)</span>
                   ) : (
-                    <span className="badge badge-rag">🧠 Sovereign Hybrid RAG (Local GPU · Qwen3-8B)</span>
+                    <span className="badge badge-rag"><span aria-hidden="true">🧠</span> Sovereign Hybrid RAG (Local GPU · Qwen3-8B)</span>
                   )}
 
                   {m.latency_ms != null && (
-                    <span className="badge badge-green">⏱️ {m.latency_ms} ms</span>
+                    <span className="badge badge-green"><span aria-hidden="true">⏱️</span> {m.latency_ms} ms</span>
                   )}
 
                   {m.grounded_pct != null && (
                     <span className="badge badge-amber">
-                      🎯 {(m.grounded_pct * 100).toFixed(0)}% Grounded
+                      <span aria-hidden="true">🎯</span> {(m.grounded_pct * 100).toFixed(0)}% Grounded
                     </span>
                   )}
 
@@ -229,20 +231,20 @@ export default function Query() {
                       <button
                         className={`small${m.rating === 1 ? " badge-green" : ""}`}
                         style={{ padding: "2px 8px", fontSize: 14, cursor: "pointer" }}
-                        title="Helpful"
+                        aria-label="Rate as helpful"
                         onClick={() => submitFeedback(i, 1)}
                         disabled={m.rating !== undefined}
                       >
-                        👍
+                        <span aria-hidden="true">👍</span>
                       </button>
                       <button
                         className={`small${m.rating === -1 ? " badge-red" : ""}`}
                         style={{ padding: "2px 8px", fontSize: 14, cursor: "pointer" }}
-                        title="Not helpful"
+                        aria-label="Rate as not helpful"
                         onClick={() => submitFeedback(i, -1)}
                         disabled={m.rating !== undefined}
                       >
-                        👎
+                        <span aria-hidden="true">👎</span>
                       </button>
                     </span>
                   )}
@@ -264,7 +266,7 @@ export default function Query() {
                           fontSize: 11,
                         }}
                       >
-                        📄 {s.title} (p.{s.page})
+                        <span aria-hidden="true">📄</span> {s.title} (p.{s.page})
                       </span>
                     ))}
                   </div>
@@ -274,14 +276,14 @@ export default function Query() {
           ))}
 
           {busy && (
-            <div className="bubble bot" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="bubble bot" role="status" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span>Searching verified vector chunks & SQL tables...</span>
             </div>
           )}
 
           {!messages.length && !busy && (
             <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-muted)" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
+              <div style={{ fontSize: 32, marginBottom: 8 }} aria-hidden="true">🔍</div>
               <p style={{ margin: 0 }}>Click any of the inquiry presets above or type a custom question.</p>
             </div>
           )}
@@ -290,4 +292,3 @@ export default function Query() {
     </div>
   );
 }
-
