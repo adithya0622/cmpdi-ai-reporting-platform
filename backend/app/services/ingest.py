@@ -199,8 +199,11 @@ def index_document(
         db.add(doc)
         db.flush()
         for page_no, ptext in pages:
-            for chunk in chunk_text(ptext):
-                db.add(Chunk(document_id=doc.id, page=page_no, text=chunk))
+            clean_ptext = (ptext or "").replace("\x00", "")
+            for chunk in chunk_text(clean_ptext):
+                clean_chunk = chunk.replace("\x00", "").strip()
+                if clean_chunk:
+                    db.add(Chunk(document_id=doc.id, page=page_no, text=clean_chunk))
         doc_id = doc.id
         db.commit()
     except Exception:
