@@ -30,6 +30,9 @@ def overview(_user=Depends(require_min_role("admin"))):
                     gold = sum(1 for line in fh if line.strip() and not line.startswith("#"))
         except Exception:
             pass
+        feedback_up = db.execute(sqltext("SELECT COUNT(*) FROM query_log WHERE rating = 1")).scalar() or 0
+        feedback_down = db.execute(sqltext("SELECT COUNT(*) FROM query_log WHERE rating = -1")).scalar() or 0
+        total_queries = db.execute(sqltext("SELECT COUNT(*) FROM query_log")).scalar() or 0
     finally:
         db.close()
     return {
@@ -42,6 +45,7 @@ def overview(_user=Depends(require_min_role("admin"))):
         "jobs": jobs.queue_stats(),
         "db": True,
         "llm": llm.available(),
+        "feedback": {"positive": feedback_up, "negative": feedback_down, "total_queries": total_queries},
     }
 
 
@@ -126,7 +130,7 @@ def query_log(limit: int = 100, _user=Depends(require_min_role("admin"))):
     try:
         rows = db.execute(
             sqltext(
-                "SELECT id, ts, username, question, subsidiary, latency_ms, grounded_pct, mode "
+                "SELECT id, ts, username, question, subsidiary, latency_ms, grounded_pct, mode, rating "
                 "FROM query_log ORDER BY ts DESC LIMIT :l"
             ),
             {"l": limit},

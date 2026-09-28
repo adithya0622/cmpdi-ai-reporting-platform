@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     # one (demo data generator). Keep OFF in anything resembling production - synthetic
     # statutory records must never be presented as real.
     demo_mode: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    notification_emails: str = ""
+    webhook_url: str = ""
 
     @model_validator(mode="after")
     def _anchor_data_dir(self):

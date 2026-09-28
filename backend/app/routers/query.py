@@ -1,11 +1,12 @@
 import json
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from ..auth import require_min_role, scoped_subsidiary
-from ..db import get_engine
+from ..db import SessionLocal, get_engine
 from ..schemas import QueryIn
 from ..services import llm, rag
 
@@ -34,7 +35,7 @@ def query(body: QueryIn, user=Depends(require_min_role("viewer"))):
     result["sources"] = _dedupe_sources(result.get("sources"))
     latency_ms = int((time.time() - t0) * 1000)
     result["latency_ms"] = latency_ms
-    rag.log_query(
+    ql_id = rag.log_query(
         body.question,
         result.get("answer", ""),
         result.get("sources", []),
@@ -44,6 +45,8 @@ def query(body: QueryIn, user=Depends(require_min_role("viewer"))):
         mode=result.get("mode", ""),
         grounded_pct=result.get("grounded_pct"),
     )
+    if ql_id is not None:
+        result["query_log_id"] = ql_id
     return result
 
 
@@ -67,7 +70,7 @@ def query_stream(body: QueryIn, user=Depends(require_min_role("viewer"))):
                 latency_ms = int((time.time() - t0) * 1000)
                 final["latency_ms"] = latency_ms
                 final["sources"] = _dedupe_sources(final.get("sources"))
-                rag.log_query(
+                ql_id = rag.log_query(
                     body.question,
                     final.get("answer", ""),
                     final.get("sources", []),
@@ -77,8 +80,33 @@ def query_stream(body: QueryIn, user=Depends(require_min_role("viewer"))):
                     mode=final.get("mode", ""),
                     grounded_pct=final.get("grounded_pct"),
                 )
+                if ql_id is not None:
+                    yield f"data: {json.dumps({'type': 'query_log_id', 'id': ql_id})}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+class FeedbackIn(BaseModel):
+    rating: int  # 1 = helpful, -1 = unhelpful
+    comment: str = ""
+
+
+@router.post("/{query_id}/feedback")
+def submit_feedback(query_id: int, body: FeedbackIn, user=Depends(require_min_role("viewer"))):
+    if body.rating not in (1, -1):
+        raise HTTPException(status_code=400, detail="rating must be 1 or -1")
+    from ..models import QueryLog
+    db = SessionLocal()
+    try:
+        ql = db.get(QueryLog, query_id)
+        if ql is None:
+            raise HTTPException(status_code=404, detail="query not found")
+        ql.rating = body.rating
+        ql.feedback_text = body.comment[:1000] if body.comment else None
+        db.commit()
+        return {"id": query_id, "rating": body.rating}
+    finally:
+        db.close()
 
 
 @router.get("/health")

@@ -11,6 +11,7 @@ import Reports from "./pages/Reports";
 import Review from "./pages/Review";
 import Documents from "./pages/Documents";
 import Login from "./pages/Login";
+import HelpButton from "./components/HelpButton";
 import UtilityBar from "./components/UtilityBar";
 
 export default function App() {
@@ -43,6 +44,7 @@ export default function App() {
         <Header />
         <main id="main">{children}</main>
         <Footer />
+        <HelpButton />
       </>
     );
   }

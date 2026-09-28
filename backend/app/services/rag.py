@@ -1314,19 +1314,22 @@ def answer(query: str, subsidiary: str = "", history: list[dict] | None = None) 
     }
 
 
-def log_query(question: str, answer_text: str, sources: list, username: str = "", subsidiary: str = "", latency_ms: int = 0, mode: str = "", grounded_pct: float | None = None) -> None:
+def log_query(question: str, answer_text: str, sources: list, username: str = "", subsidiary: str = "", latency_ms: int = 0, mode: str = "", grounded_pct: float | None = None) -> int | None:
     from ..models import QueryLog
 
     try:
         db = SessionLocal()
         try:
-            db.add(QueryLog(
+            ql = QueryLog(
                 question=question[:2000], answer=answer_text[:8000], sources=sources,
                 username=username or "", subsidiary=subsidiary or "",
                 latency_ms=latency_ms, mode=mode, grounded_pct=grounded_pct,
-            ))
+            )
+            db.add(ql)
             db.commit()
+            db.refresh(ql)
+            return ql.id
         finally:
             db.close()
     except Exception:
-        pass
+        return None

@@ -16,6 +16,27 @@ from ..models import Chunk, Document, ExtractionField, ExtractionRun
 from . import llm, validation
 
 
+SUBSIDIARY_CANONICAL: dict[str, str] = {
+    "eastern coalfields": "ECL", "eastern coalfields limited": "ECL", "ecl": "ECL",
+    "bharat coking coal": "BCCL", "bharat coking coal limited": "BCCL", "bccl": "BCCL",
+    "central coalfields": "CCL", "central coalfields limited": "CCL", "ccl": "CCL",
+    "northern coalfields": "NCL", "northern coalfields limited": "NCL", "ncl": "NCL",
+    "western coalfields": "WCL", "western coalfields limited": "WCL", "wcl": "WCL",
+    "south eastern coalfields": "SECL", "south eastern coalfields limited": "SECL", "secl": "SECL",
+    "mahanadi coalfields": "MCL", "mahanadi coalfields limited": "MCL", "mcl": "MCL",
+    "neyveli lignite": "NLC", "neyveli lignite corporation": "NLC", "nlc india": "NLC", "nlc": "NLC",
+    "coal india": "CIL", "coal india limited": "CIL", "cil": "CIL",
+    "cmpdi": "CMPDI", "central mine planning": "CMPDI",
+    "central mine planning and design institute": "CMPDI",
+}
+
+
+def normalize_subsidiary(name: str) -> str:
+    if not name:
+        return ""
+    return SUBSIDIARY_CANONICAL.get(name.strip().lower(), name.strip())
+
+
 def _clean_subsidiary(raw) -> str:
     """Sanitize LLM-extracted subsidiary values before storing: cap length, drop
     shell-redirect junk (e.g. '1>>D:\\...log 2>&1' leaked from a mis-quoted command),
@@ -23,7 +44,7 @@ def _clean_subsidiary(raw) -> str:
     s = str(raw or "").strip()
     if not s or len(s) > 40 or any(m in s for m in (">>", "<<", "2>&1", ".log", ":\\", "/mnt/", "--")):
         return ""
-    return s
+    return normalize_subsidiary(s)
 
 
 def _to_doc_date(text: str, report_date: str) -> datetime.date | None:

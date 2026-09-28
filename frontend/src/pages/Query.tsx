@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { apiStream } from "../api";
+import { api, apiStream } from "../api";
 
 type Msg = {
   role: "user" | "bot";
@@ -8,6 +8,8 @@ type Msg = {
   latency_ms?: number;
   grounded_pct?: number;
   sources?: any[];
+  query_log_id?: number;
+  rating?: number;
 };
 
 const PRESETS = [
@@ -114,7 +116,10 @@ export default function Query() {
               latency_ms: j.latency_ms,
               grounded_pct: j.grounded_pct,
               sources: j.sources,
+              query_log_id: j.query_log_id,
             });
+          } else if (ev.type === "query_log_id") {
+            patch({ query_log_id: ev.id });
           }
         }
       );
@@ -123,6 +128,20 @@ export default function Query() {
       setMessages((m) => [...m, { role: "bot", content: `Error: ${e.message}` }]);
     }
     setBusy(false);
+  }
+
+  async function submitFeedback(msgIdx: number, rating: number) {
+    const m = messages[msgIdx];
+    if (!m?.query_log_id) return;
+    try {
+      await api(`/query/${m.query_log_id}/feedback`, {
+        method: "POST",
+        body: { rating },
+      });
+      setMessages((all) =>
+        all.map((x, i) => (i === msgIdx ? { ...x, rating } : x))
+      );
+    } catch {}
   }
 
   function handlePreset(p: (typeof PRESETS)[0]) {
@@ -202,6 +221,29 @@ export default function Query() {
                   {m.grounded_pct != null && (
                     <span className="badge badge-amber">
                       🎯 {(m.grounded_pct * 100).toFixed(0)}% Grounded
+                    </span>
+                  )}
+
+                  {m.query_log_id && (
+                    <span style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+                      <button
+                        className={`small${m.rating === 1 ? " badge-green" : ""}`}
+                        style={{ padding: "2px 8px", fontSize: 14, cursor: "pointer" }}
+                        title="Helpful"
+                        onClick={() => submitFeedback(i, 1)}
+                        disabled={m.rating !== undefined}
+                      >
+                        👍
+                      </button>
+                      <button
+                        className={`small${m.rating === -1 ? " badge-red" : ""}`}
+                        style={{ padding: "2px 8px", fontSize: 14, cursor: "pointer" }}
+                        title="Not helpful"
+                        onClick={() => submitFeedback(i, -1)}
+                        disabled={m.rating !== undefined}
+                      >
+                        👎
+                      </button>
                     </span>
                   )}
                 </div>

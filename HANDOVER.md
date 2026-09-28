@@ -13,7 +13,8 @@ Operational handover: what runs, how to operate, how to troubleshoot.
 ```
 
 Modules: report generation (docxtpl Word), word cloud + topic ID + trends, RAG query/response
-with figure routing, schema-validated extraction with human review queue, RBAC, audit log.
+with figure routing, schema-validated extraction with human review queue, RBAC, audit log,
+AI recommendation engine, user feedback loop, notifications (SMTP/webhook), priority job queue.
 
 ## 2. First-time setup
 
@@ -49,7 +50,8 @@ with figure routing, schema-validated extraction with human review queue, RBAC, 
 | Review flagged values | Review page → Confirm / Reject (corrections update the value, feed eval) |
 | Daily ops analytics | Analytics page → Daily operations card: stoppage Pareto + machine utilization (filter by date range) |
 | Generate report | Reports page → title/subsidiary/years → Download .docx |
-| Ask questions | Query page — figure questions route to extracted data, rest to RAG |
+| Ask questions | Query page — figure questions route to extracted data, rest to RAG. Rate answers with thumbs up/down |
+| AI recommendations | Analytics page → Generate Recommendations (analyzes trends, stoppages, utilization) |
 | Word cloud / topics / trends | Analytics page (filter by subsidiary/year) |
 
 ## 4. Admin runbook
@@ -59,7 +61,8 @@ with figure routing, schema-validated extraction with human review queue, RBAC, 
 | System health | Admin page, or `GET /query/health` |
 | Job failures + retry | Admin page → Jobs → Retry |
 | Audit trail | Admin page → Audit log |
-| Answer quality monitor | Admin page → Query log (faithfulness % per answer) |
+| Answer quality monitor | Admin page → Query log (faithfulness % + user feedback per answer) |
+| User feedback stats | Admin page → Overview KPIs show positive/negative feedback counts |
 | Backup | `python scripts/backup.py` — schedule daily (cron / Task Scheduler) |
 | Load test | `python scripts/load_test.py --users 50 --concurrency 10 --token <token>` |
 | Extraction accuracy eval | `python scripts/eval_harness.py --gold evals/gold_set.jsonl --show-misses --save` (LLM required; `--show-misses` prints each failed field, `--save` writes `evals/latest_eval.json` for the KPI endpoint) |
@@ -79,7 +82,35 @@ with figure routing, schema-validated extraction with human review queue, RBAC, 
 | 429 responses | Rate limit (120 req/min/IP) | Raise `RATE_LIMIT_PER_MIN` |
 | Login fails after restart | `AUTH_SECRET` unset → random per-process secret | Set `AUTH_SECRET` env |
 
-## 6. Air-gap checklist
+## 6. Notifications (optional)
+
+Set in `.env` or compose environment to enable email/webhook alerts on job failures and extraction completions:
+
+| Setting | Example | Purpose |
+|---|---|---|
+| `SMTP_HOST` | `mail.internal.cil` | SMTP relay host |
+| `SMTP_PORT` | `587` | SMTP port (default 587) |
+| `SMTP_USER` | `cmpdi-alerts` | Login user (omit for open relay) |
+| `SMTP_PASSWORD` | `...` | SMTP password |
+| `SMTP_FROM` | `cmpdi@cil.in` | From address |
+| `NOTIFICATION_EMAILS` | `admin@cil.in,ops@ecl.in` | Comma-separated recipients |
+| `WEBHOOK_URL` | `http://internal/hooks/cmpdi` | POST JSON on events |
+
+Events: `job_failed`, `extraction_complete`.
+
+## 7. Production scaling
+
+Use `docker-compose.prod.yml` for multi-replica deployment:
+
+```powershell
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+Includes: nginx load balancer (port 80), 2 backend replicas, 2 worker replicas, SSE-friendly proxy config.
+Required: set `AUTH_SECRET` and `DB_PASSWORD` in `.env`.
+
+## 8. Air-gap checklist
+
 
 Pre-download on a connected machine, copy into `./data` (mounted at `/data`):
 
@@ -89,7 +120,7 @@ Pre-download on a connected machine, copy into `./data` (mounted at `/data`):
 - [ ] npm packages: vendored `frontend/node_modules` or offline registry mirror
 - [ ] Tesseract language packs (hin) — included in the Dockerfile apt install
 
-## 7. Metrics tracking (RFP targets)
+## 9. Metrics tracking (RFP targets)
 
 | Metric | Where |
 |---|---|
@@ -98,7 +129,7 @@ Pre-download on a connected machine, copy into `./data` (mounted at `/data`):
 | Automation 80% | Ingestion + extraction + report jobs vs manual touchpoints |
 | MoC response time | `query_log.latency_ms` + answer turnaround |
 
-## 8. Where things live
+## 10. Where things live
 
 ```
 backend/app/            FastAPI app (routers/, services/, static/)
@@ -111,7 +142,7 @@ data/                   runtime data: uploads/, reports/, models/, backups/
 USER_GUIDE.md           end-user training guide (analysts, viewers, admins)
 ```
 
-## 9. Demo (no real data needed)
+## 11. Demo (no real data needed)
 
 ```powershell
 python scripts/make_demo_data.py --ingest     # 34 synthetic docs, ingested into running platform

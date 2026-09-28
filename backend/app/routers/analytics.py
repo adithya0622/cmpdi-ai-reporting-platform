@@ -75,6 +75,12 @@ def kpis(user=Depends(require_min_role("viewer"))):
     return analytics.kpis()
 
 
+@router.get("/recommendations")
+def recommendations(subsidiary: str = "", user=Depends(require_min_role("viewer"))):
+    """AI-generated actionable recommendations based on analytics data."""
+    return analytics.recommendations(scoped_subsidiary(user, subsidiary))
+
+
 @router.get("/machine_utilization")
 def machine_utilization(
     subsidiary: str = "",

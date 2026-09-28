@@ -10,6 +10,7 @@ from app.auth import LEVELS, hash_password, make_token, parse_token, verify_pass
 from app.extraction_schemas import expand_items, parse_extraction, parse_report_date
 from app.services.analytics import classify_stoppage, count_terms
 from app.services.extraction import _clean_subsidiary
+from app.services.extraction import SUBSIDIARY_CANONICAL, normalize_subsidiary
 from app.services.rag import (
     QUERY_STOP,
     _fix_hi_units,
@@ -442,3 +443,38 @@ class TestAnalytics:
         assert c["कोयला"] == 2
         assert c["उत्पादन"] == 1
         assert c["भंडार"] == 1
+
+
+# ── 9. Subsidiary normalization ─────────────────────────────────────────────
+
+class TestSubsidiaryNormalization:
+    def test_canonical_mapping_ecl(self):
+        assert normalize_subsidiary("Eastern Coalfields") == "ECL"
+        assert normalize_subsidiary("eastern coalfields limited") == "ECL"
+        assert normalize_subsidiary("ECL") == "ECL"
+
+    def test_canonical_mapping_bccl(self):
+        assert normalize_subsidiary("Bharat Coking Coal") == "BCCL"
+        assert normalize_subsidiary("bccl") == "BCCL"
+
+    def test_canonical_mapping_nlc(self):
+        assert normalize_subsidiary("NLC India") == "NLC"
+        assert normalize_subsidiary("Neyveli Lignite") == "NLC"
+
+    def test_canonical_mapping_cmpdi(self):
+        assert normalize_subsidiary("Central Mine Planning and Design Institute") == "CMPDI"
+        assert normalize_subsidiary("CMPDI") == "CMPDI"
+
+    def test_unknown_passes_through(self):
+        assert normalize_subsidiary("Some New Subsidiary") == "Some New Subsidiary"
+
+    def test_empty_returns_empty(self):
+        assert normalize_subsidiary("") == ""
+
+    def test_whitespace_stripped(self):
+        assert normalize_subsidiary("  ECL  ") == "ECL"
+
+    def test_all_subsidiaries_present(self):
+        expected = {"ECL", "BCCL", "CCL", "NCL", "WCL", "SECL", "MCL", "NLC", "CIL", "CMPDI"}
+        mapped = set(SUBSIDIARY_CANONICAL.values())
+        assert expected == mapped

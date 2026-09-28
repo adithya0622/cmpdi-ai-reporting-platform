@@ -1,0 +1,101 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: cmpdi
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cmpdi}
+      POSTGRES_DB: cmpdi
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmpdi"]
+      interval: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://cmpdi:${DB_PASSWORD:-cmpdi}@db:5432/cmpdi
+      DATA_DIR: /data
+      LLM_BASE_URL: http://vllm:8001/v1
+      LLM_API_KEY: EMPTY
+      LLM_MODEL: Qwen/Qwen3-8B-GGUF
+      EMBEDDING_MODEL: intfloat/multilingual-e5-base
+      OCR_LANG: eng+hin
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
+      EXTRACTION_CONFIDENCE_THRESHOLD: 0.7
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      NOTIFICATION_EMAILS: ${NOTIFICATION_EMAILS:-}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+    volumes:
+      - ./data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 4G
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "scripts/worker.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg2://cmpdi:${DB_PASSWORD:-cmpdi}@db:5432/cmpdi
+      DATA_DIR: /data
+      LLM_BASE_URL: http://vllm:8001/v1
+      LLM_API_KEY: EMPTY
+      LLM_MODEL: Qwen/Qwen3-8B-GGUF
+      EMBEDDING_MODEL: intfloat/multilingual-e5-base
+      OCR_LANG: eng+hin
+      SMTP_HOST: ${SMTP_HOST:-}
+      NOTIFICATION_EMAILS: ${NOTIFICATION_EMAILS:-}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+    volumes:
+      - ./data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+
+  vllm:
+    image: vllm/vllm-openai:v0.6.6
+    profiles: [llm]
+    command: ["--model", "Qwen/Qwen3-8B-GGUF", "--max-model-len", "8192", "--port", "8001"]
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  pgdata:
+  hf_cache:

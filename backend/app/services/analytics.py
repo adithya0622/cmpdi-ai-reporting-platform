@@ -307,6 +307,114 @@ def kpis() -> dict:
     }
 
 
+def recommendations(subsidiary: str = "") -> dict:
+    """AI-generated actionable recommendations based on analytics data.
+    Collects KPIs, trends, stoppage patterns, and utilization data, detects
+    anomalies computationally, then feeds a structured summary to the LLM
+    for natural-language recommendations."""
+    data_points: list[str] = []
+    alerts: list[dict] = []
+
+    k = kpis()
+    data_points.append(f"Automation: {k['automation_pct']}% ({k['fields_auto']}/{k['fields_total']} fields)")
+    if k["fields_review"] > 0:
+        alerts.append({"severity": "medium", "category": "review_backlog",
+                        "detail": f"{k['fields_review']} extraction fields awaiting human review"})
+    if k.get("eval") and k["eval"].get("precision", 1.0) < 0.95:
+        alerts.append({"severity": "high", "category": "extraction_accuracy",
+                        "detail": f"Extraction accuracy {k['eval']['precision']*100:.1f}% is below 95% target"})
+
+    prod_trends = trends("production_lt", subsidiary)
+    if len(prod_trends) >= 2:
+        latest = prod_trends[-1]
+        prev = prod_trends[-2]
+        if prev["value"] > 0:
+            change_pct = round((latest["value"] - prev["value"]) / prev["value"] * 100, 1)
+            data_points.append(f"Production trend: {prev['year']}→{latest['year']} changed {change_pct:+.1f}%")
+            if change_pct < -5:
+                alerts.append({"severity": "high", "category": "production_decline",
+                                "detail": f"Production dropped {abs(change_pct)}% from {prev['year']} to {latest['year']} "
+                                          f"({prev['value']:.2f} → {latest['value']:.2f} lakh t)"})
+
+    pareto = stoppage_pareto(subsidiary)
+    if pareto["stoppage_events"] > 0:
+        data_points.append(f"Total downtime: {pareto['total_stoppage_h']} hours across {pareto['stoppage_events']} events")
+        if pareto["categories"]:
+            top_cat = pareto["categories"][0]
+            data_points.append(f"Top stoppage: {top_cat['category']} ({top_cat['hours']}h, {top_cat['share_pct']}%)")
+            if top_cat["share_pct"] > 40:
+                alerts.append({"severity": "high", "category": "stoppage_concentration",
+                                "detail": f"'{top_cat['category']}' accounts for {top_cat['share_pct']}% of all downtime ({top_cat['hours']}h)"})
+
+    util = machine_utilization(subsidiary)
+    underutilized = [m for m in util if m["utilization_pct"] is not None and m["utilization_pct"] < 50]
+    if underutilized:
+        names = ", ".join(m["machine_id"] for m in underutilized[:5])
+        data_points.append(f"Underutilized machines (<50%): {names}")
+        for m in underutilized[:3]:
+            alerts.append({"severity": "medium", "category": "low_utilization",
+                            "detail": f"{m['machine_id']} utilization at {m['utilization_pct']}% "
+                                      f"(EWH {m['ewh_h']}h / TWH {m['twh_h']}h)"})
+
+    db = SessionLocal()
+    try:
+        low_grounded = db.execute(sqltext(
+            "SELECT COUNT(*) FROM query_log WHERE grounded_pct IS NOT NULL AND grounded_pct < 0.5 "
+            "AND ts > NOW() - INTERVAL '7 days'"
+        )).scalar() or 0
+        total_queries = db.execute(sqltext(
+            "SELECT COUNT(*) FROM query_log WHERE ts > NOW() - INTERVAL '7 days'"
+        )).scalar() or 0
+    finally:
+        db.close()
+    if total_queries > 0:
+        data_points.append(f"Queries (7d): {total_queries} total, {low_grounded} with <50% grounding")
+        if low_grounded > 0 and low_grounded / total_queries > 0.2:
+            alerts.append({"severity": "medium", "category": "answer_quality",
+                            "detail": f"{low_grounded}/{total_queries} recent queries have low grounding — "
+                                      "consider ingesting more documents for those topics"})
+
+    recs: list[dict] = []
+    if llm.available() and (alerts or data_points):
+        summary = "## Current Analytics Snapshot\n"
+        summary += "\n".join(f"- {dp}" for dp in data_points)
+        if alerts:
+            summary += "\n\n## Detected Issues\n"
+            summary += "\n".join(f"- [{a['severity'].upper()}] {a['detail']}" for a in alerts)
+
+        raw = llm.chat(
+            f"You are an AI advisor for Coal India's CMPDI reporting platform. "
+            f"Based on the analytics data below, generate 3-5 specific, actionable recommendations. "
+            f"For each recommendation, give: a short title, the recommendation text, and expected impact. "
+            f"Focus on operational improvements, not generic advice. "
+            f"Reply as a JSON array: [{{\"title\": \"...\", \"recommendation\": \"...\", \"impact\": \"...\", \"priority\": \"high|medium|low\"}}]\n\n"
+            f"{summary}",
+            max_tokens=1024,
+        )
+        try:
+            start = raw.find("[")
+            end = raw.rfind("]") + 1
+            if start >= 0 and end > start:
+                recs = json.loads(raw[start:end])
+        except (json.JSONDecodeError, ValueError):
+            log.debug("Failed to parse LLM recommendations JSON", exc_info=True)
+
+    if not recs:
+        for a in alerts[:5]:
+            recs.append({
+                "title": a["category"].replace("_", " ").title(),
+                "recommendation": a["detail"],
+                "impact": "Address this to improve operational metrics.",
+                "priority": a["severity"],
+            })
+
+    return {
+        "recommendations": recs,
+        "alerts": alerts,
+        "data_summary": data_points,
+    }
+
+
 def machine_utilization(subsidiary: str = "", date_from=None, date_to=None, limit: int = 50) -> list[dict]:
     """Per-machine utilization from stoppage reports: EWH/TWH % and output, aggregated over the period."""
     db = SessionLocal()

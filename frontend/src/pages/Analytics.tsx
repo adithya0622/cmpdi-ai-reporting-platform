@@ -39,6 +39,11 @@ export default function Analytics() {
   const [topicTrends, setTopicTrends] = useState<any[]>([]);
   const [err, setErr] = useState("");
 
+  // recommendations state
+  const [recs, setRecs] = useState<any | null>(null);
+  const [recsLoading, setRecsLoading] = useState(false);
+  const [recsErr, setRecsErr] = useState("");
+
   // daily operations state
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -95,6 +100,18 @@ export default function Analytics() {
     setOpsBusy(false);
   }
 
+  async function loadRecs() {
+    setRecsErr("");
+    setRecsLoading(true);
+    try {
+      const s = subsidiary ? `?subsidiary=${subsidiary}` : "";
+      setRecs(await api("/analytics/recommendations" + s));
+    } catch (e: any) {
+      setRecsErr(e.message);
+    }
+    setRecsLoading(false);
+  }
+
   useEffect(() => {
     api("/analytics/kpis").then(setKpis).catch(() => {});
   }, []);
@@ -126,6 +143,37 @@ export default function Analytics() {
               <div className="kpi"><div className="n">{kpis.human_triage_agreement_pct}%</div><div className="l">human–AI agreement ({kpis.fields_confirmed + kpis.fields_rejected} triaged)</div></div>
             )}
             <div className="kpi"><div className="n">{kpis.corpus.documents}</div><div className="l">documents indexed ({kpis.corpus.vector_chunks}/{kpis.corpus.chunks} chunks vectorized)</div></div>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>AI Recommendations</h3>
+        <p className="src" style={{ marginTop: -4, marginBottom: 8 }}>
+          AI-generated actionable insights based on production trends, equipment utilization, stoppage patterns, and query quality.
+        </p>
+        <button className="primary" onClick={loadRecs} disabled={recsLoading}>
+          {recsLoading ? "Analyzing..." : "Generate Recommendations"}
+        </button>
+        {recsErr && <span className="msg err">{recsErr}</span>}
+        {recs && recs.recommendations && (
+          <div style={{ marginTop: 12 }}>
+            {recs.recommendations.map((r: any, idx: number) => {
+              const color = r.priority === "high" ? "#e74c3c" : r.priority === "medium" ? "#f39c12" : "#2980b9";
+              return (
+                <div key={idx} style={{ borderLeft: `4px solid ${color}`, padding: "8px 12px", marginBottom: 10, background: "var(--card-bg)", borderRadius: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span className="badge" style={{ background: color, color: "#fff", padding: "2px 8px", fontSize: 10, borderRadius: 3 }}>
+                      {(r.priority || "medium").toUpperCase()}
+                    </span>
+                    <b>{r.title}</b>
+                  </div>
+                  <div style={{ fontSize: 13, lineHeight: 1.5 }}>{r.recommendation}</div>
+                  {r.impact && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Impact: {r.impact}</div>}
+                </div>
+              );
+            })}
+            {recs.recommendations.length === 0 && <p className="src">No actionable recommendations at this time — all metrics within healthy ranges.</p>}
           </div>
         )}
       </div>

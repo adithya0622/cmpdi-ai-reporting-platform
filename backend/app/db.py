@@ -100,6 +100,30 @@ def _migrate():
             conn.execute(text("ALTER TABLE extraction_fields ADD COLUMN specified_by VARCHAR(200) DEFAULT ''"))
             conn.commit()
             print("[migrate] added extraction_fields.specified_by")
+        qlcols = [
+            r[0]
+            for r in conn.execute(
+                text("SELECT column_name FROM information_schema.columns WHERE table_name = 'query_log'")
+            )
+        ]
+        if qlcols and "rating" not in qlcols:
+            conn.execute(text("ALTER TABLE query_log ADD COLUMN rating INTEGER"))
+            conn.commit()
+            print("[migrate] added query_log.rating")
+        if qlcols and "feedback_text" not in qlcols:
+            conn.execute(text("ALTER TABLE query_log ADD COLUMN feedback_text TEXT"))
+            conn.commit()
+            print("[migrate] added query_log.feedback_text")
+        jcols2 = [
+            r[0]
+            for r in conn.execute(
+                text("SELECT column_name FROM information_schema.columns WHERE table_name = 'jobs'")
+            )
+        ]
+        if jcols2 and "priority" not in jcols2:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN priority INTEGER DEFAULT 0"))
+            conn.commit()
+            print("[migrate] added jobs.priority")
 
 
 def init_db():

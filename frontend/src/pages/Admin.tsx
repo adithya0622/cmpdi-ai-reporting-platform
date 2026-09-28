@@ -71,6 +71,12 @@ export default function Admin() {
           <div className="kpi"><div className="n">{overview.extraction_runs_pending}</div><div className="l">Runs pending</div></div>
           <div className="kpi"><div className="n">{overview.jobs?.failed || 0}</div><div className="l">Failed jobs</div></div>
           <div className="kpi"><div className="n">{overview.llm ? "up" : "down"}</div><div className="l">LLM</div></div>
+          {overview.feedback && (
+            <div className="kpi">
+              <div className="n">{overview.feedback.positive} / {overview.feedback.negative}</div>
+              <div className="l">Feedback +/- ({overview.feedback.total_queries} queries)</div>
+            </div>
+          )}
         </div>
       )}
       {dq && (
@@ -146,7 +152,7 @@ export default function Admin() {
       <div className="card">
         <h3>Query log (faithfulness monitor)</h3>
         <table>
-          <thead><tr><th>Question</th><th>User</th><th>Mode</th><th>Latency</th><th>Grounded</th></tr></thead>
+          <thead><tr><th>Question</th><th>User</th><th>Mode</th><th>Latency</th><th>Grounded</th><th>Feedback</th></tr></thead>
           <tbody>
             {queries.map((q) => (
               <tr key={q.id}>
@@ -155,6 +161,7 @@ export default function Admin() {
                 <td>{q.mode}</td>
                 <td>{q.latency_ms} ms</td>
                 <td>{q.grounded_pct != null ? (q.grounded_pct * 100).toFixed(0) + "%" : "-"}</td>
+                <td>{q.rating === 1 ? "👍" : q.rating === -1 ? "👎" : "-"}</td>
               </tr>
             ))}
             {!queries.length && <tr><td>No queries yet.</td></tr>}

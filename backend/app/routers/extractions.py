@@ -32,9 +32,10 @@ def run(body: RunIn, user=Depends(require_min_role("analyst"))):
         raise HTTPException(status_code=400, detail=str(e))
     from ..services.audit import log as audit_log
 
-    jobs.enqueue("extract_run", {"run_id": str(run_id)})
+    priority = 10 if body.doc_type == "parliamentary_q" else 0
+    jobs.enqueue("extract_run", {"run_id": str(run_id)}, priority=priority)
     audit_log("extraction_run", user.username, {"document_id": body.document_id, "doc_type": body.doc_type})
-    return {"run_id": str(run_id), "status": "queued"}
+    return {"run_id": str(run_id), "status": "queued", "priority": "high" if priority > 0 else "normal"}
 
 
 @router.get("/runs")

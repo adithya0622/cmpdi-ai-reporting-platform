@@ -129,6 +129,7 @@ class Job(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     kind: Mapped[str] = mapped_column(String(50))
     payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    priority: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="queued")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
@@ -148,6 +149,8 @@ class QueryLog(Base):
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     grounded_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     mode: Mapped[str] = mapped_column(String(20), default="")
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    feedback_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class AuditLog(Base):
