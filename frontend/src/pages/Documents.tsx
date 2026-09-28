@@ -76,6 +76,22 @@ export default function Documents() {
     }
   }
 
+  async function approveAll() {
+    if (!confirm("Are you sure you want to approve all documents in the corpus with their certified statutory officers?")) return;
+    setBusy(true);
+    setMsg("");
+    setErr("");
+    try {
+      const res = await api("/documents/approve-all", { method: "POST" });
+      setMsg(res.message || "All documents successfully approved!");
+      load();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="page-inner">
       <div className="card">
@@ -95,8 +111,24 @@ export default function Documents() {
         {err && <span className="msg err">{err}</span>}
       </div>
       <div className="card">
-        <h3>Indexed documents</h3>
-        <label>Filter by subsidiary</label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h3 style={{ margin: 0 }}>Indexed documents</h3>
+          <button
+            className="primary"
+            style={{
+              background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+              border: "1px solid #10b981",
+              fontSize: "0.85rem",
+              padding: "6px 14px",
+              boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)",
+            }}
+            onClick={approveAll}
+            disabled={busy}
+          >
+            ✓ Approve All Documents
+          </button>
+        </div>
+        <label style={{ marginTop: 12 }}>Filter by subsidiary</label>
         <input value={filterSub} onChange={(e) => setFilterSub(e.target.value)} />
         <table style={{ marginTop: 8 }}>
           <thead>

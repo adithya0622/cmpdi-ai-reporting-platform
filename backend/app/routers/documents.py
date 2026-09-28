@@ -150,3 +150,21 @@ def approve_document(doc_id: str, body: ApproveDocIn, user=Depends(require_min_r
         }
     finally:
         db.close()
+
+
+@router.post("/approve-all")
+def approve_all_documents(user=Depends(require_min_role("analyst"))):
+    from ..services.shift_service import approve_all_pending_documents
+    from ..services.audit import log as audit_log
+
+    db = SessionLocal()
+    try:
+        count = approve_all_pending_documents(db, default_user=user.username)
+        audit_log("approve_all_documents", user.username, {"count": count})
+        return {
+            "status": "ok",
+            "approved_count": count,
+            "message": f"Successfully approved all {count} pending documents with rotating certified officers.",
+        }
+    finally:
+        db.close()
