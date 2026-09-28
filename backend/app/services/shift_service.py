@@ -85,12 +85,12 @@ def get_roster_personnel(doc_date: datetime.date, mine_name: str = "Mine-1", shi
         )
 
     # Shift & Mine offsets
-    day_num = doc_date.year * 372 + doc_date.month * 31 + doc_date.day
+    day_ord = doc_date.toordinal()
     shift_offset = 1 if "ii" in shift.lower() or "2nd" in shift.lower() else (2 if "iii" in shift.lower() or "3rd" in shift.lower() else 0)
     mine_offset = 0 if is_m1 else 3
 
-    spec_idx = (day_num + mine_offset + shift_offset) % len(spec_pool)
-    app_idx = (day_num + mine_offset + shift_offset + 5) % len(APPROVERS_LIST)
+    spec_idx = (day_ord + mine_offset * 3 + shift_offset) % len(spec_pool)
+    app_idx = (day_ord * 3 + mine_offset * 5 + shift_offset + 7) % len(APPROVERS_LIST)
 
     specifier = spec_pool[spec_idx]
     approver = APPROVERS_LIST[app_idx]

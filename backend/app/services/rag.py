@@ -342,9 +342,12 @@ def lookup_shift(query: str, subsidiary: str = "", history: list[dict] | None = 
                     base_date = bd
                     break
 
-        if relative_day != 0 and base_date:
-            qdate = base_date + datetime.timedelta(days=relative_day)
-        elif not qdate and base_date and (history_has_shift or "that day" in q or "that shift" in q):
+        if relative_day != 0:
+            anchor = base_date or datetime.date.today()
+            qdate = anchor + datetime.timedelta(days=relative_day)
+        elif not qdate and ("today" in q or "current shift" in q):
+            qdate = datetime.date.today()
+        elif not qdate and base_date and (history_has_shift or "that day" in q or "that shift" in q or "this day" in q):
             qdate = base_date
 
         sql = (
