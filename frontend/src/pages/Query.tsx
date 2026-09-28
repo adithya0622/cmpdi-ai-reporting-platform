@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../api";
+import { apiStream } from "../api";
 
 type Msg = {
   role: "user" | "bot";
@@ -59,6 +59,18 @@ const PRESETS = [
     q: "What are the exploration replies regarding critical mineral and coal blocks in Rajya Sabha question 2668?",
     sub: "",
   },
+  {
+    tag: "Hindi Query",
+    label: "🇮🇳 भारत की कुल कोयला भंडार संख्या क्या है? (Hindi)",
+    q: "भारत की कुल कोयला भंडार संख्या क्या है?",
+    sub: "",
+  },
+  {
+    tag: "Hindi Query",
+    label: "🇮🇳 2024 में BCCL का कोयला उत्पादन कितना था? (Hindi)",
+    q: "2024 में BCCL का कोयला उत्पादन कितना था?",
+    sub: "BCCL",
+  },
 ];
 
 export default function Query() {
@@ -81,21 +93,31 @@ export default function Query() {
     setMessages((m) => [...m, { role: "user", content: q }]);
     setBusy(true);
     try {
-      const j = await api("/query", {
-        method: "POST",
-        body: { question: q, subsidiary: sub, history },
-      });
-      setMessages((m) => [
-        ...m,
-        {
-          role: "bot",
-          content: j.answer,
-          mode: j.mode,
-          latency_ms: j.latency_ms,
-          grounded_pct: j.grounded_pct,
-          sources: j.sources,
-        },
-      ]);
+      let msg = { role: "bot" as const, content: "" };
+      setMessages((m) => [...m, msg]);
+      const patch = (p: Partial<Msg>) =>
+        setMessages((all) => all.map((x, i) => (i === all.length - 1 ? { ...x, ...p } : x)));
+      await apiStream(
+        "/query/stream",
+        { method: "POST", body: { question: q, subsidiary: sub, history } },
+        (ev) => {
+          if (ev.type === "sources") {
+            patch({ sources: ev.sources });
+          } else if (ev.type === "token") {
+            msg = { ...msg, content: msg.content + ev.token };
+            patch({ content: msg.content });
+          } else if (ev.type === "done" && ev.result) {
+            const j = ev.result;
+            patch({
+              content: j.answer,
+              mode: j.mode,
+              latency_ms: j.latency_ms,
+              grounded_pct: j.grounded_pct,
+              sources: j.sources,
+            });
+          }
+        }
+      );
     } catch (e: any) {
       setErr(e.message);
       setMessages((m) => [...m, { role: "bot", content: `Error: ${e.message}` }]);
@@ -170,7 +192,7 @@ export default function Query() {
                   {m.mode === "figures" ? (
                     <span className="badge badge-sql">⚡ Deterministic SQL Query (Zero Hallucination)</span>
                   ) : (
-                    <span className="badge badge-rag">🧠 Sovereign Hybrid RAG (Qwen 9B GPU)</span>
+                    <span className="badge badge-rag">🧠 Sovereign Hybrid RAG (Local GPU · Qwen3-8B)</span>
                   )}
 
                   {m.latency_ms != null && (

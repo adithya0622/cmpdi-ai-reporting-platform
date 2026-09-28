@@ -1,5 +1,6 @@
 import itertools
 import json
+import logging
 import os
 import re
 from collections import Counter
@@ -10,6 +11,8 @@ from ..config import settings
 from ..db import SessionLocal
 from . import llm
 
+log = logging.getLogger(__name__)
+
 STOP = {
     "the", "and", "of", "to", "in", "a", "for", "on", "is", "with", "as", "by", "at", "from",
     "an", "be", "are", "were", "was", "this", "that", "it", "or", "not", "has", "have", "had",
@@ -18,6 +21,12 @@ STOP = {
 }
 
 WORD_RE = re.compile(r"[a-z\u0900-\u097F]{3,}")
+
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    _HAS_SKLEARN = True
+except ImportError:
+    _HAS_SKLEARN = False
 
 
 def count_terms(texts) -> Counter:
@@ -54,13 +63,43 @@ def wordcloud(subsidiary: str = "", year_from: int | None = None, year_to: int |
     return [{"term": w, "count": c} for w, c in counts.most_common(top_n)]
 
 
+def _tfidf_keyphrases(texts: list[str], top_n: int = 15) -> list[dict]:
+    """Extract top keyphrases via TF-IDF over unigrams + bigrams."""
+    if not _HAS_SKLEARN or len(texts) < 2:
+        return []
+    try:
+        vec = TfidfVectorizer(
+            ngram_range=(1, 2),
+            max_features=500,
+            stop_words=list(STOP),
+            token_pattern=r"[a-zA-Zऀ-ॿ]{3,}",
+            max_df=0.85,
+            min_df=2,
+        )
+        tfidf = vec.fit_transform(texts)
+        scores = tfidf.sum(axis=0).A1
+        terms = vec.get_feature_names_out()
+        ranked = sorted(zip(terms, scores), key=lambda x: -x[1])[:top_n]
+        return [{"term": t, "count": round(float(s), 4)} for t, s in ranked]
+    except Exception:
+        log.debug("TF-IDF topic extraction failed, falling back to bigrams", exc_info=True)
+        return []
+
+
 def topics(subsidiary: str = "", year_from: int | None = None, year_to: int | None = None, top_n: int = 15) -> dict:
     rows = _rows(subsidiary, year_from, year_to)
-    counts: Counter = Counter()
-    for r in rows:
-        words = [w for w in WORD_RE.findall(r["text"].lower()) if w not in STOP]
-        counts.update(itertools.pairwise(words))
-    bigrams = [{"term": f"{a} {b}", "count": c} for (a, b), c in counts.most_common(top_n)]
+    texts = [r["text"] for r in rows]
+
+    keyphrases = _tfidf_keyphrases(texts, top_n)
+    if keyphrases:
+        topic_list = keyphrases
+    else:
+        counts: Counter = Counter()
+        for r in rows:
+            words = [w for w in WORD_RE.findall(r["text"].lower()) if w not in STOP]
+            counts.update(itertools.pairwise(words))
+        topic_list = [{"term": f"{a} {b}", "count": c} for (a, b), c in counts.most_common(top_n)]
+
     summary = ""
     if llm.available() and rows:
         sample = "\n\n".join(r["text"][:500] for r in rows[:20])
@@ -69,8 +108,7 @@ def topics(subsidiary: str = "", year_from: int | None = None, year_to: int | No
             "Reply with a short bullet list.\n\n" + sample,
             max_tokens=512,
         )
-    # ponytail: bigram counts instead of KeyBERT/BERTopic; swap in when topic quality matters
-    return {"topics": bigrams, "summary": summary}
+    return {"topics": topic_list, "summary": summary}
 
 
 def trends(field_name: str, subsidiary: str = "") -> list[dict]:
@@ -97,19 +135,27 @@ def trends(field_name: str, subsidiary: str = "") -> list[dict]:
 
 
 def topic_trends(subsidiary: str = "", year_from: int | None = None, year_to: int | None = None, per_year: int = 5) -> list[dict]:
-    """Top bigrams per year - topics over time."""
-    counts_by_year: dict[int, Counter] = {}
+    """Top keyphrases per year — TF-IDF when available, bigram fallback otherwise."""
+    texts_by_year: dict[int, list[str]] = {}
     for r in _rows(subsidiary, year_from, year_to):
         y = r["doc_year"] or 0
-        words = [w for w in WORD_RE.findall(r["text"].lower()) if w not in STOP]
-        counts_by_year.setdefault(y, Counter()).update(itertools.pairwise(words))
-    return [
-        {
-            "year": y,
-            "topics": [{"term": f"{a} {b}", "count": c} for (a, b), c in cnt.most_common(per_year)],
-        }
-        for y, cnt in sorted(counts_by_year.items())
-    ]
+        texts_by_year.setdefault(y, []).append(r["text"])
+
+    result = []
+    for y in sorted(texts_by_year):
+        kp = _tfidf_keyphrases(texts_by_year[y], per_year)
+        if kp:
+            result.append({"year": y, "topics": kp})
+        else:
+            counts: Counter = Counter()
+            for t in texts_by_year[y]:
+                words = [w for w in WORD_RE.findall(t.lower()) if w not in STOP]
+                counts.update(itertools.pairwise(words))
+            result.append({
+                "year": y,
+                "topics": [{"term": f"{a} {b}", "count": c} for (a, b), c in counts.most_common(per_year)],
+            })
+    return result
 
 
 # Stoppage reason classification (ordered; first match wins). Tuned on NLC Mine-I reports.

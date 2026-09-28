@@ -8,10 +8,10 @@
       "llm_fail": 0,
       "expected": 70,
       "extracted": 70,
-      "matched": 69,
-      "precision": 0.986,
-      "recall": 0.986,
-      "f1": 0.986
+      "matched": 68,
+      "precision": 0.971,
+      "recall": 0.971,
+      "f1": 0.971
     },
     "geological": {
       "runs": 9,
@@ -28,10 +28,10 @@
       "llm_fail": 0,
       "expected": 27,
       "extracted": 27,
-      "matched": 26,
-      "precision": 0.963,
-      "recall": 0.963,
-      "f1": 0.963
+      "matched": 27,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
     },
     "daily_shift_report": {
       "runs": 6,
@@ -54,5 +54,5 @@
       "f1": 1.0
     }
   },
-  "saved_at": "2026-09-25 18:54:24"
+  "saved_at": "2026-09-28 11:58:54"
 }

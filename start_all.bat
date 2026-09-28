@@ -11,7 +11,11 @@ wsl -d Ubuntu -u root -- service postgresql start
 
 echo.
 echo [2/4] Starting Local LLM Inference Engine (GPU Accelerated)...
-start "CMPDI LLM Server (Port 8001)" /min cmd /c "data\llm\llama-server.exe -m data\llm\qwen2.5-3b-instruct-q4_k_m.gguf --port 8001 -c 8192 -ngl 99 --parallel 1 --host 0.0.0.0"
+if exist "data\llm\Qwen3-8B-Q4_K_M.gguf" (
+  start "CMPDI LLM Server (Port 8001)" /min cmd /c "data\llm\llama-server.exe -m data\llm\Qwen3-8B-Q4_K_M.gguf --port 8001 -c 8192 -ngl 99 --parallel 1 --host 0.0.0.0 -fa on -ctk q8_0 -ctv q8_0"
+) else (
+  start "CMPDI LLM Server (Port 8001)" /min cmd /c "data\llm\llama-server.exe -m data\llm\qwen2.5-3b-instruct-q4_k_m.gguf --port 8001 -c 8192 -ngl 99 --parallel 1 --host 0.0.0.0"
+)
 
 echo.
 echo [3/4] Starting CMPDI FastAPI Backend Server (Port 8000)...
@@ -28,6 +32,7 @@ echo   All services launched successfully!
 echo   Web Platform: http://localhost:8000
 echo   API Docs:     http://localhost:8000/docs
 echo   Default Login: admin / demo123
+echo   LLM Model:     Qwen3-8B (Q4_K_M) - if present, else Qwen2.5-3B fallback
 echo ======================================================================
 echo.
 pause

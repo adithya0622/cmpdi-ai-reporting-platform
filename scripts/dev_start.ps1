@@ -1,16 +1,34 @@
 # Local dev deploy: WSL Postgres + backend + worker.
 # One-time prerequisites: scripts/wsl_pg_setup.sh installs PG16+pgvector in WSL Ubuntu.
 # backend/.env points at postgresql+pg8000://cmpdi:cmpdi@localhost:5432/cmpdi
+#
+# NOTE: all paths are derived from this script's own folder ($PSScriptRoot), so the
+# correct copy of the project starts even if several checkouts exist on disk.
+
+$Root = $PSScriptRoot | Split-Path -Parent
+$BackendDir = Join-Path $Root "backend"
+$VenvPython = Join-Path $Root ".venv\Scripts\python.exe"
+$PidFile = Join-Path $Root "backend.pid"
+$SetupScript = Join-Path $PSScriptRoot "wsl_pg_setup.sh"
+$WslPath = ($SetupScript -replace "^([A-Za-z]):", { "/mnt/" + $_.Groups[1].Value.ToLower() }) -replace "\\", "/"
 
 Write-Output "[1/3] Postgres (WSL)..."
-wsl -d Ubuntu -u root -- bash /mnt/d/PS2/scripts/wsl_pg_setup.sh
+wsl -d Ubuntu -u root -- bash $WslPath
+
+# Refuse to start a second backend on :8000 (stale server = stale answers)
+$busy = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+if ($busy) {
+    Write-Output "PORT 8000 already in use (PID $($busy.OwningProcess)). Stop that process first."
+    Write-Output "  Stop-Process -Id $($busy.OwningProcess) -Force"
+    exit 1
+}
 
 Write-Output "[2/3] Backend on :8000..."
-$backend = Start-Process -FilePath "D:\PS2\.venv\Scripts\python.exe" -ArgumentList "-m","uvicorn","app.main:app","--port","8000" -WorkingDirectory "D:\PS2\backend" -PassThru -WindowStyle Hidden
-$backend.Id | Set-Content "D:\PS2\backend.pid"
+$backend = Start-Process -FilePath $VenvPython -ArgumentList "-m","uvicorn","app.main:app","--port","8000" -WorkingDirectory $BackendDir -PassThru -WindowStyle Hidden
+$backend.Id | Set-Content $PidFile
 
 Write-Output "[3/3] Worker..."
-Start-Process -FilePath "D:\PS2\.venv\Scripts\python.exe" -ArgumentList "D:\PS2\scripts\worker.py","--poll","3" -WorkingDirectory "D:\PS2\backend" -WindowStyle Hidden
+Start-Process -FilePath $VenvPython -ArgumentList (Join-Path $Root "scripts\worker.py"),"--poll","3" -WorkingDirectory $BackendDir -WindowStyle Hidden
 
 Start-Sleep -Seconds 8
 try {

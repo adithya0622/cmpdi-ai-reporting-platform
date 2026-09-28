@@ -43,6 +43,45 @@ export async function api(path: string, opts: ApiOpts = {}): Promise<any> {
   return r.json();
 }
 
+export async function apiStream(path: string, opts: ApiOpts = {}, onEvent: (ev: any) => void): Promise<void> {
+  const headers: Record<string, string> = Object.assign(
+    { "X-API-Token": getToken(), Accept: "text/event-stream" },
+    (opts.headers as Record<string, string>) || {}
+  );
+  if (opts.body && typeof opts.body !== "string") {
+    headers["Content-Type"] = "application/json";
+    opts = { ...opts, body: JSON.stringify(opts.body) };
+  }
+  const r = await fetch(path, { ...opts, headers });
+  if (r.status === 401) {
+    logout();
+    throw new Error("session expired - login again");
+  }
+  if (!r.ok || !r.body) throw new Error((await r.text()).slice(0, 300));
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const raw = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of raw.split("\n")) {
+        if (line.startsWith("data: ")) {
+          try {
+            onEvent(JSON.parse(line.slice(6)));
+          } catch {
+            /* ignore malformed keepalive frames */
+          }
+        }
+      }
+    }
+  }
+}
+
 export async function login(username: string, password: string): Promise<any> {
   const r = await fetch("/auth/login", {
     method: "POST",

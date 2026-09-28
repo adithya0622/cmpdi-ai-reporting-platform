@@ -3,6 +3,7 @@ import { api } from "../api";
 
 export default function Admin() {
   const [overview, setOverview] = useState<any>(null);
+  const [dq, setDq] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [audit, setAudit] = useState<any[]>([]);
@@ -16,14 +17,16 @@ export default function Admin() {
 
   async function load() {
     try {
-      const [ov, u, j, a, q] = await Promise.all([
+      const [ov, d, u, j, a, q] = await Promise.all([
         api("/admin/overview"),
+        api("/admin/data_quality"),
         api("/auth/users"),
         api("/admin/jobs?limit=50"),
         api("/admin/audit?limit=50"),
         api("/admin/queries?limit=30"),
       ]);
       setOverview(ov);
+      setDq(d);
       setUsers(u);
       setJobs(j);
       setAudit(a);
@@ -68,6 +71,33 @@ export default function Admin() {
           <div className="kpi"><div className="n">{overview.extraction_runs_pending}</div><div className="l">Runs pending</div></div>
           <div className="kpi"><div className="n">{overview.jobs?.failed || 0}</div><div className="l">Failed jobs</div></div>
           <div className="kpi"><div className="n">{overview.llm ? "up" : "down"}</div><div className="l">LLM</div></div>
+        </div>
+      )}
+      {dq && (
+        <div className="card">
+          <h3>Data Quality Monitor</h3>
+          <div className="kpis" style={{ marginBottom: 12 }}>
+            <div className="kpi"><div className="n">{dq.fields_awaiting_review}</div><div className="l">Fields awaiting review</div></div>
+            <div className="kpi"><div className="n">{dq.junk_subsidiary_values}</div><div className="l">Corrupt values caught</div></div>
+            <div className="kpi"><div className="n">{(dq.document_status || []).find((s: any) => s.status === "approved")?.n ?? 0}</div><div className="l">Approved docs</div></div>
+          </div>
+          {(dq.flagged_anomalies || []).length > 0 && (
+            <table>
+              <thead>
+                <tr><th>Document</th><th>Field</th><th>Value</th><th>Confidence</th></tr>
+              </thead>
+              <tbody>
+                {dq.flagged_anomalies.slice(0, 8).map((a: any, i: number) => (
+                  <tr key={i}>
+                    <td>{a.title}</td>
+                    <td>{a.field_name}</td>
+                    <td>{a.value_num != null ? String(a.value_num) : "—"} {a.unit}</td>
+                    <td>{(a.confidence * 100).toFixed(0)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
       <div className="card">

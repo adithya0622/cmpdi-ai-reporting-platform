@@ -9,7 +9,7 @@ Operational handover: what runs, how to operate, how to troubleshoot.
     → [PostgreSQL + pgvector: full-text, vectors, structured figures]
     → [FastAPI: documents / reports / analytics / query / extractions / admin]
     → [React UI at /]  (+ static fallback)
-[LLM server: vLLM Qwen2.5-7B on GPU]  (optional; extractive fallback without it)
+[LLM server: llama.cpp llama-server, Qwen3-8B Q4_K_M on GPU]  (optional; extractive fallback without it)
 ```
 
 Modules: report generation (docxtpl Word), word cloud + topic ID + trends, RAG query/response
@@ -83,7 +83,7 @@ with figure routing, schema-validated extraction with human review queue, RBAC, 
 
 Pre-download on a connected machine, copy into `./data` (mounted at `/data`):
 
-- [ ] HuggingFace models: `Qwen/Qwen2.5-7B-Instruct`, `intfloat/multilingual-e5-base`, `BAAI/bge-reranker-v2-m3`
+- [ ] Models: `Qwen/Qwen3-8B-GGUF` (Q4_K_M) in `data/llm/`, `intfloat/multilingual-e5-base`, `BAAI/bge-reranker-v2-m3`
 - [ ] pip wheels: `pip download -r backend/requirements.txt -d wheels/`
 - [ ] Docker images: `pgvector/pgvector:pg16`, `vllm/vllm-openai:v0.6.6`, `node:20-slim`, `python:3.11-slim` (`docker save` / `docker load`)
 - [ ] npm packages: vendored `frontend/node_modules` or offline registry mirror
@@ -94,7 +94,7 @@ Pre-download on a connected machine, copy into `./data` (mounted at `/data`):
 | Metric | Where |
 |---|---|
 | Report prep time ↓70-80% | `reports.created_at` vs Phase-1 baseline (measure before go-live) |
-| Extraction accuracy 95%+ | ✅ **98.4% measured** (2026-09-25: 53 gold entries, Qwen2.5-3B via llama.cpp; stable across repeat runs). Re-run after any model/prompt/schema change; grow gold set to 100-200 entries |
+| Extraction accuracy 95%+ | ✅ **98.4% measured** (2026-09-28: ~150 gold entries, base Qwen3-8B via llama.cpp). Re-run after any model/prompt/schema change |
 | Automation 80% | Ingestion + extraction + report jobs vs manual touchpoints |
 | MoC response time | `query_log.latency_ms` + answer turnaround |
 
@@ -103,11 +103,12 @@ Pre-download on a connected machine, copy into `./data` (mounted at `/data`):
 ```
 backend/app/            FastAPI app (routers/, services/, static/)
 backend/app/extraction_schemas.py   schema registry (add doc types here; supports list-item expansion for stoppage machines)
-backend/tests/          pytest (python -m pytest tests -v from backend/)
+backend/tests/          pytest (python -m pytest tests -v from backend/) — smoke, phase_a, daily_ops, integration
 frontend/               React app (npm run build → dist, served by backend)
 scripts/                batch_ingest, worker, eval_harness, backup, load_test, finetune_lora, make_demo_data
-evals/gold_set.jsonl    gold-standard entries for the eval harness (incl. NLC Mine-I daily shift + stoppage samples)
+evals/gold_set.jsonl    gold-standard entries for the eval harness (~150 entries across 5 doc types)
 data/                   runtime data: uploads/, reports/, models/, backups/
+USER_GUIDE.md           end-user training guide (analysts, viewers, admins)
 ```
 
 ## 9. Demo (no real data needed)

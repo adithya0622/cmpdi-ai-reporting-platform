@@ -48,6 +48,10 @@ def available() -> bool:
 
 
 def chat(prompt: str, system: str = "You are an assistant for Coal India Limited (CMPDI) geological and mining reporting.", max_tokens: int = 1024) -> str:
+    # Qwen3 thinking-mode soft switch: keep answers direct and low-latency
+    # (extraction JSON, cited RAG answers, report summaries). Harmless for other models.
+    if "/no_think" not in prompt:
+        prompt = prompt + " /no_think"
     resp = client().chat.completions.create(
         model=settings.llm_model,
         messages=[
@@ -58,3 +62,23 @@ def chat(prompt: str, system: str = "You are an assistant for Coal India Limited
         temperature=0.2,
     )
     return resp.choices[0].message.content or ""
+
+
+def chat_stream(prompt: str, system: str = "You are an assistant for Coal India Limited (CMPDI) geological and mining reporting.", max_tokens: int = 1024):
+    """Yield answer text incrementally (SSE-friendly). Same switch + params as chat()."""
+    if "/no_think" not in prompt:
+        prompt = prompt + " /no_think"
+    stream = client().chat.completions.create(
+        model=settings.llm_model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=max_tokens,
+        temperature=0.2,
+        stream=True,
+    )
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content if chunk.choices else None
+        if delta:
+            yield delta

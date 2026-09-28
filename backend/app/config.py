@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     vector_enabled: bool = True
     admin_user: str = "admin"
     admin_password: str = ""
+    # When True, queries for dates with no stored shift report synthesize a realistic
+    # one (demo data generator). Keep OFF in anything resembling production - synthetic
+    # statutory records must never be presented as real.
+    demo_mode: bool = False
 
     @model_validator(mode="after")
     def _anchor_data_dir(self):

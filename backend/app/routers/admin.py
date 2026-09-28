@@ -45,6 +45,42 @@ def overview(_user=Depends(require_min_role("admin"))):
     }
 
 
+@router.get("/data_quality")
+def data_quality(_user=Depends(require_min_role("admin"))):
+    """Data-quality monitor: anomalies caught by validation, review-queue state, and
+    the latest integrity scrubs - makes the validation story visible in the demo."""
+    db = SessionLocal()
+    try:
+        review_fields = db.execute(
+            sqltext("SELECT COUNT(*) FROM extraction_fields WHERE status = 'review'")
+        ).scalar()
+        anomalies = db.execute(
+            sqltext(
+                "SELECT ef.field_name, ef.value_num, ef.unit, ef.confidence, d.title, d.subsidiary "
+                "FROM extraction_fields ef JOIN documents d ON d.id = ef.document_id "
+                "WHERE ef.status = 'review' "
+                "ORDER BY ef.confidence ASC LIMIT 20"
+            )
+        ).mappings().all()
+        junk_subs = db.execute(
+            sqltext(
+                "SELECT COUNT(*) FROM extraction_fields "
+                "WHERE subsidiary LIKE '%>>%' OR subsidiary LIKE '%2>&1%'"
+            )
+        ).scalar()
+        doc_status = db.execute(
+            sqltext("SELECT status, COUNT(*) AS n FROM documents GROUP BY status ORDER BY n DESC")
+        ).mappings().all()
+        return {
+            "fields_awaiting_review": review_fields,
+            "junk_subsidiary_values": junk_subs,
+            "document_status": [dict(r) for r in doc_status],
+            "flagged_anomalies": [dict(r) for r in anomalies],
+        }
+    finally:
+        db.close()
+
+
 @router.get("/jobs")
 def list_jobs(limit: int = 100, _user=Depends(require_min_role("admin"))):
     db = SessionLocal()

@@ -19,7 +19,7 @@ AI-assisted document processing and reporting for CMPDI/CIL subsidiaries. On-pre
 ## Stack
 
 - Backend: FastAPI, SQLAlchemy 2, PostgreSQL + pgvector (structured data, full-text, vectors — one DB, three jobs)
-- LLM: vLLM (OpenAI-compatible API) with Qwen2.5-7B-Instruct; works without LLM (graceful degradation)
+- LLM: any OpenAI-compatible server - llama.cpp `llama-server` with Qwen3-8B (Q4_K_M) locally, or vLLM; works without LLM (graceful degradation)
 - Embeddings: `intfloat/multilingual-e5-base` (Hindi + English)
 - OCR: Tesseract (eng+hin)
 - Frontend: static HTML/JS served by backend at `/` (no npm build step — air-gapped friendly)
@@ -115,7 +115,7 @@ Analytics over extracted stoppages: `GET /analytics/stoppage_pareto?date_from=..
 
 Pre-download on a connected machine, then copy into `./data` (mounted at `/data` in container):
 
-- Models: `Qwen/Qwen2.5-7B-Instruct` (HF cache), `intfloat/multilingual-e5-base`
+- Models: `Qwen/Qwen3-8B-GGUF` (Q4_K_M), `intfloat/multilingual-e5-base`
 - pip wheels: `pip download -r backend/requirements.txt -d wheels/`
 - vLLM image: `docker pull vllm/vllm-openai:v0.6.6` + `docker save`
 
@@ -125,7 +125,7 @@ Pre-download on a connected machine, then copy into `./data` (mounted at `/data`
 |---|---|---|
 | `DATABASE_URL` | localhost pg | use `db` host in compose; on Windows with App Control policy blocking psycopg2, use `postgresql+pg8000://` |
 | `API_TOKEN` | empty = auth off | set a token to require `X-API-Token` header |
-| `LLM_BASE_URL` / `LLM_MODEL` | vLLM Qwen 7B | any OpenAI-compatible endpoint (vLLM/Ollama) |
+| `LLM_BASE_URL` / `LLM_MODEL` | local llama-server (Qwen3-8B) | any OpenAI-compatible endpoint (llama.cpp/vLLM/Ollama) |
 | `EMBEDDING_MODEL` | multilingual-e5-base | must be 384-dim (matches `Vector(384)`) |
 | `OCR_LANG` | eng+hin | Tesseract languages |
 

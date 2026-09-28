@@ -97,3 +97,27 @@ def test_fmt_value_and_field():
     # stoppage labels carry meta info (machine|stop#1|1000-1200) - no machine prefix
     assert _fmt_field(F(field_name="stoppage_duration_h", value_num=2.0, unit="hours", item="BWE-1|stop#1|1000-1200|maint")) == "Stoppage: 2 h"
     assert _fmt_field(F(field_name="x", value_num=None)) is None
+
+
+def test_tfidf_keyphrases_basic():
+    from app.services.analytics import _tfidf_keyphrases
+
+    texts = [
+        "Coal production increased in Eastern Coalfields with higher output from underground mines",
+        "Eastern Coalfields coal production exceeded targets in the fiscal quarter",
+        "Northern Coalfields reported record coal dispatch and offtake figures",
+        "Coal dispatch from Northern Coalfields grew by eight percent this year",
+        "Western Coalfields maintained steady coal production levels throughout the year",
+    ]
+    result = _tfidf_keyphrases(texts, top_n=5)
+    assert len(result) >= 1
+    assert all("term" in r and "count" in r for r in result)
+    terms = [r["term"] for r in result]
+    assert any("coal" in t for t in terms)
+
+
+def test_tfidf_keyphrases_too_few_docs():
+    from app.services.analytics import _tfidf_keyphrases
+
+    assert _tfidf_keyphrases(["single document only"], top_n=5) == []
+    assert _tfidf_keyphrases([], top_n=5) == []

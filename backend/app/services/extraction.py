@@ -16,6 +16,16 @@ from ..models import Chunk, Document, ExtractionField, ExtractionRun
 from . import llm, validation
 
 
+def _clean_subsidiary(raw) -> str:
+    """Sanitize LLM-extracted subsidiary values before storing: cap length, drop
+    shell-redirect junk (e.g. '1>>D:\\...log 2>&1' leaked from a mis-quoted command),
+    and keep only plausible short org-name tokens."""
+    s = str(raw or "").strip()
+    if not s or len(s) > 40 or any(m in s for m in (">>", "<<", "2>&1", ".log", ":\\", "/mnt/", "--")):
+        return ""
+    return s
+
+
 def _to_doc_date(text: str, report_date: str) -> datetime.date | None:
     """Best-effort doc date: DD.MM.YYYY found in text or the extracted report_date field."""
     iso = parse_report_date(text) or parse_report_date(report_date or "")
@@ -193,7 +203,7 @@ def execute_run(run_id: uuid.UUID) -> None:
                     document_id=run.document_id,
                     field_name=rec["field_name"],
                     item=rec["item"][:200],
-                    subsidiary=doc.subsidiary or (fields.get("subsidiary") or ""),
+                    subsidiary=doc.subsidiary or _clean_subsidiary(fields.get("subsidiary")),
                     value_num=float(value) if is_num else None,
                     value_str=None if is_num else str(value),
                     unit=field_unit(rec["field_name"]),

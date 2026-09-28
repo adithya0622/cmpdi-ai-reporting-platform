@@ -27,10 +27,20 @@ $WorkerPy = Join-Path $Root "scripts\worker.py"
 
 Write-Host "[2/4] llama-server (:8001)..."
 $llamaExe = Join-Path $LlmDir "llama-server.exe"
-$llamaModel = Join-Path $LlmDir "qwen2.5-3b-instruct-q4_k_m.gguf"
+$qwen3 = Join-Path $LlmDir "Qwen3-8B-Q4_K_M.gguf"
+$qwen25 = Join-Path $LlmDir "qwen2.5-3b-instruct-q4_k_m.gguf"
 $llamaLog = Join-Path $LlmDir "server.err.log"
+if (Test-Path $qwen3) {
+    $llamaModel = $qwen3
+    $llamaArgs = "--port 8001 -c 8192 -ngl 99 --parallel 1 --host 0.0.0.0 -fa on -ctk q8_0 -ctv q8_0"
+    Write-Host "      model: Qwen3-8B (Q4_K_M, q8 KV cache)"
+} else {
+    $llamaModel = $qwen25
+    $llamaArgs = "--port 8001 -c 8192 -ngl 99 --parallel 1 --host 0.0.0.0"
+    Write-Host "      model: Qwen2.5-3B (fallback - Qwen3-8B GGUF not found)"
+}
 $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-    CommandLine = "cmd /c `"$llamaExe`" -m `"$llamaModel`" --port 8001 -c 8192 -ngl 99 --parallel 1 --host 0.0.0.0 2>>`"$llamaLog`""
+    CommandLine = "cmd /c `"$llamaExe`" -m `"$llamaModel`" $llamaArgs 2>>`"$llamaLog`""
 }
 Write-Host "      launched rc=$($r.ReturnValue)"
 
