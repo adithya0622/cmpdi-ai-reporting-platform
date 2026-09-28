@@ -183,7 +183,7 @@ NUMERIC_FIELDS = {
     "twh_h", "ewh_h", "output_mt", "rate", "stoppage_duration_h",
 }
 
-DATE_RE = re.compile(r"\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})\b")
+DATE_RE = re.compile(r"\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4}|\d{2})\b")
 
 
 def field_unit(field_name: str) -> str:
@@ -200,12 +200,16 @@ def field_period_type(field_name: str) -> str:
 
 def parse_report_date(text: str) -> str:
     """Find the first DD.MM.YYYY / DD-MM-YYYY / DD/MM/YYYY date in text -> 'YYYY-MM-DD' or ''.
+    Supports 2-digit years (e.g. 9.10.22 -> 2022-10-09).
     Uses datetime.date so impossible dates (99.99.2026) are rejected."""
     m = DATE_RE.search(text or "")
     if not m:
         return ""
     try:
-        return datetime.date(int(m.group(3)), int(m.group(2)), int(m.group(1))).isoformat()
+        yr = int(m.group(3))
+        if yr < 100:
+            yr += 2000
+        return datetime.date(yr, int(m.group(2)), int(m.group(1))).isoformat()
     except ValueError:
         return ""
 

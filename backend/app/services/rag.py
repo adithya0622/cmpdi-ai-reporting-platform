@@ -161,32 +161,41 @@ def _extract_date_from_str(s: str) -> datetime.date | None:
             return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
         except ValueError:
             pass
-    # Match DD.MM.YYYY or DD-MM-YYYY or DD/MM/YYYY
-    m = re.search(r"\b(0?[1-9]|[12]\d|3[01])[./\-](0?[1-9]|1[0-2])[./\-](20\d{2})\b", s)
+    # Match DD.MM.YYYY or DD-MM-YYYY or DD/MM/YYYY or DD.MM.YY
+    m = re.search(r"\b(0?[1-9]|[12]\d|3[01])[./\-](0?[1-9]|1[0-2])[./\-](20\d{2}|\d{2})\b", s)
     if m:
         try:
-            return datetime.date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            yr = int(m.group(3))
+            if yr < 100:
+                yr += 2000
+            return datetime.date(yr, int(m.group(2)), int(m.group(1)))
         except ValueError:
             pass
-    # Month name matching: e.g. 08 Sep 2026, September 8 2026
+    # Month name matching: e.g. 08 Sep 2026, 9 Oct 22
     month_names = {
         "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
         "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
     }
-    m = re.search(r"\b(0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\s+(20\d{2})\b", s)
+    m = re.search(r"\b(0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\s+(20\d{2}|\d{2})\b", s)
     if m:
         mon_str = m.group(2).lower()[:3]
         if mon_str in month_names:
             try:
-                return datetime.date(int(m.group(3)), month_names[mon_str], int(m.group(1)))
+                yr = int(m.group(3))
+                if yr < 100:
+                    yr += 2000
+                return datetime.date(yr, month_names[mon_str], int(m.group(1)))
             except ValueError:
                 pass
-    m = re.search(r"\b([A-Za-z]{3,9})\s+(0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?,?\s+(20\d{2})\b", s)
+    m = re.search(r"\b([A-Za-z]{3,9})\s+(0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?,?\s+(20\d{2}|\d{2})\b", s)
     if m:
         mon_str = m.group(1).lower()[:3]
         if mon_str in month_names:
             try:
-                return datetime.date(int(m.group(3)), month_names[mon_str], int(m.group(2)))
+                yr = int(m.group(3))
+                if yr < 100:
+                    yr += 2000
+                return datetime.date(yr, month_names[mon_str], int(m.group(2)))
             except ValueError:
                 pass
     return None
@@ -385,6 +394,14 @@ def lookup_shift(query: str, subsidiary: str = "", history: list[dict] | None = 
                 docs = db.execute(sqltext(sql_fallback), params).mappings().all()
 
         if not docs:
+            if qdate:
+                return {
+                    "answer": f"No shift or stoppage report was found for **{qdate.strftime('%d.%m.%Y')}** in the operational repository.",
+                    "sources": [],
+                    "grounded": False,
+                    "mode": "shift",
+                    "grounded_pct": 1.0,
+                }
             sql_any = (
                 "SELECT d.id, d.title, d.doc_type, d.subsidiary, d.doc_date, d.doc_year, d.specified_by, d.approved_by, d.approved_at, d.meta "
                 "FROM documents d "
