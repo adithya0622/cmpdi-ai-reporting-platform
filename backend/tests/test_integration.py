@@ -116,10 +116,11 @@ class TestMetaHandler:
     def test_domain_query_stoppage_falls_through(self):
         assert handle_conversational_or_meta("stoppage analysis for September 2026") is None
 
-    def test_hindi_greeting_falls_through(self):
-        # Hindi greetings aren't in the English-only greeting regex
+    def test_hindi_greeting_handled(self):
         r = handle_conversational_or_meta("नमस्ते")
-        assert r is None
+        assert r is not None
+        assert r["mode"] == "meta"
+        assert "CMPDI" in r["answer"]
 
     def test_feedback_still_broken(self):
         r = handle_conversational_or_meta("still broken")

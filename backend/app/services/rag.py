@@ -68,6 +68,27 @@ HI_EN_TERMS = {
     "आपूर्ति": "offtake",
     "अन्वेषण": "exploration",
     "क्षमता": "capacity",
+    "भारत": "india",
+    "संख्या": "figures",
+    "रिपोर्ट": "report",
+    "शिफ्ट": "shift",
+    "रुकावट": "stoppage",
+    "मशीन": "machine",
+    "बोरहोल": "borehole",
+    "भूवैज्ञानिक": "geological",
+    "गहराई": "depth",
+    "मोटाई": "thickness",
+}
+
+# Map Hindi field words to FIELD_SYNONYMS keys so Hindi figure queries route to SQL
+HI_FIELD_BRIDGE = {
+    "उत्पादन": "production",
+    "वितरण": "dispatch",
+    "आपूर्ति": "offtake",
+    "भंडार": "reserves",
+    "लिग्नाइट": "lignite",
+    "गहराई": "depth",
+    "मोटाई": "thickness",
 }
 
 
@@ -355,16 +376,25 @@ def handle_conversational_or_meta(query: str, history: list[dict] | None = None)
         )
         return {"answer": ans, "sources": [], "grounded": True, "mode": "meta", "grounded_pct": 1.0}
 
-    # 4. Greetings & Politeness
-    if re.search(r"^(?:hi|hello|hey|good\s+morning|good\s+afternoon|good\s+evening)(?:\s+there)?[!.]*$", q):
-        ans = (
-            "Hello! I am your CMPDI Sovereign AI Assistant. "
-            "I can help you analyze mine shift registers, production figures, stoppage reports, and national coal inventory data. "
-            "How can I help you today?"
-        )
+    # 4. Greetings & Politeness (English + Hindi/Devanagari)
+    if re.search(r"^(?:hi|hello|hey|good\s+morning|good\s+afternoon|good\s+evening)(?:\s+there)?[!.]*$", q) or \
+       re.search(r"^(?:नमस्ते|नमस्कार|हैलो|हाय|प्रणाम|सुप्रभात|शुभ\s*(?:प्रभात|संध्या|रात्रि))[!.।\s]*$", q):
+        is_hindi = any(c >= 'ऀ' and c <= 'ॿ' for c in q)
+        if is_hindi:
+            ans = (
+                "नमस्ते! मैं आपका CMPDI सॉवरेन AI सहायक हूँ। "
+                "मैं खदान शिफ्ट रजिस्टर, उत्पादन आँकड़े, रुकावट रिपोर्ट, और राष्ट्रीय कोयला भंडार डेटा का विश्लेषण करने में आपकी सहायता कर सकता हूँ। "
+                "आज मैं आपकी कैसे मदद कर सकता हूँ?"
+            )
+        else:
+            ans = (
+                "Hello! I am your CMPDI Sovereign AI Assistant. "
+                "I can help you analyze mine shift registers, production figures, stoppage reports, and national coal inventory data. "
+                "How can I help you today?"
+            )
         return {"answer": ans, "sources": [], "grounded": True, "mode": "meta", "grounded_pct": 1.0}
 
-    if re.search(r"^(?:thanks|thank\s+you|thank\s+you\s+so\s+much)[!.]*$", q):
+    if re.search(r"^(?:thanks|thank\s+you|thank\s+you\s+so\s+much|धन्यवाद|शुक्रिया)[!.।\s]*$", q):
         ans = "You are welcome! Let me know if you need any other mining reports, shift logs, or statutory statistics."
         return {"answer": ans, "sources": [], "grounded": True, "mode": "meta", "grounded_pct": 1.0}
 
@@ -842,6 +872,75 @@ def lookup_shift(query: str, subsidiary: str = "", history: list[dict] | None = 
         db.close()
 
 
+_CIL_SUBSIDIARIES = ["ECL", "BCCL", "CCL", "NCL", "WCL", "SECL", "MCL", "NEC", "CIL", "NLC"]
+
+
+def lookup_comparison(query: str) -> dict | None:
+    """Side-by-side comparison when users ask 'compare X and Y' or 'X vs Y'."""
+    q = query.lower()
+    if not re.search(r"\b(?:compare|comparison|versus|vs\.?)\b", q):
+        return None
+
+    found_subs = [s for s in _CIL_SUBSIDIARIES if re.search(rf"\b{s}\b", q, re.I)]
+    if len(found_subs) < 2:
+        return None
+
+    fields = sorted({syn for word, syn in FIELD_SYNONYMS.items() if re.search(rf"\b{word}\b", q)})
+    if not fields:
+        fields = ["production_lt", "dispatch_lt"]
+
+    m = YEAR_RE.search(query)
+    year = int(m.group(0)) if m else None
+
+    db = SessionLocal()
+    try:
+        rows_by_sub: dict[str, dict[str, float]] = {s: {} for s in found_subs}
+        sources: list[dict] = []
+        for f in fields:
+            dts = FIELD_DOC_TYPES.get(f)
+            for sub in found_subs:
+                sql = (
+                    "SELECT AVG(ef.value_num) AS v, COUNT(*) AS n, MIN(d.title) AS title "
+                    "FROM extraction_fields ef JOIN documents d ON d.id = ef.document_id "
+                    "WHERE ef.field_name = :f AND ef.value_num IS NOT NULL "
+                    "AND ef.status IN ('auto', 'confirmed') "
+                    "AND (ef.subsidiary ILIKE :s OR d.subsidiary ILIKE :s) "
+                )
+                params: dict = {"f": f, "s": f"%{sub}%"}
+                if dts:
+                    ph = ", ".join(f":dt{i}" for i in range(len(dts)))
+                    sql += f"AND d.doc_type IN ({ph}) "
+                    params.update({f"dt{i}": dt for i, dt in enumerate(dts)})
+                if year:
+                    sql += "AND d.doc_year = :y "
+                    params["y"] = year
+                r = db.execute(sqltext(sql), params).mappings().first()
+                if r and r["v"] is not None:
+                    rows_by_sub[sub][f] = float(r["v"])
+                    sources.append({"title": r["title"], "page": 0, "subsidiary": sub, "score": 1.0})
+    finally:
+        db.close()
+
+    if not any(rows_by_sub[s] for s in found_subs):
+        return None
+
+    header = "| Metric | " + " | ".join(found_subs) + " |"
+    sep = "|---|" + "|".join("---:" for _ in found_subs) + "|"
+    body_lines = []
+    for f in fields:
+        unit = "lakh t" if f.endswith("_lt") else ("MT" if f.endswith("_mt") else "")
+        cells = []
+        for s in found_subs:
+            v = rows_by_sub[s].get(f)
+            cells.append(f"{v:,.2f} {unit}" if v is not None else "—")
+        label = f.replace("_", " ").replace(" lt", "").replace(" mt", "").title()
+        body_lines.append(f"| {label} | " + " | ".join(cells) + " |")
+
+    yr_note = f" ({year})" if year else ""
+    ans = f"**Subsidiary Comparison{yr_note}:**\n\n{header}\n{sep}\n" + "\n".join(body_lines)
+    return {"answer": ans, "sources": sources, "grounded": True, "mode": "figures", "grounded_pct": 1.0}
+
+
 def lookup_figures(query: str, subsidiary: str = "") -> dict | None:
     """Route figure questions to the structured extraction tables (exact answer, no hallucination).
     Quarterly fields aggregate per subsidiary/year; daily-ops fields list the latest day(s) instead -
@@ -852,7 +951,20 @@ def lookup_figures(query: str, subsidiary: str = "") -> dict | None:
     if any(k in q for k in ("lok sabha", "rajya sabha", "parliament", "unstarred", "starred")) or re.search(r"\b(?:question|q)\s*\d+\b", q):
         return None
 
+    # National-scale resource/reserve inquiries belong in RAG (inventory documents), not figures
+    _has_resource_word = re.search(r"\b(?:resources?|inventory)\b", q) or any(w in query for w in ("भंडार", "संसाधन"))
+    _has_national_scope = re.search(r"\b(?:india|national|total|country)\b", q) or any(w in query for w in ("भारत", "कुल", "राष्ट्रीय", "देश"))
+    if _has_resource_word and _has_national_scope:
+        return None
+    # "compare" queries need side-by-side presentation — handle below, not the raw figure dump
+    if re.search(r"\b(?:compare|comparison|versus|vs\.?)\b", q):
+        return None
+
     fields = sorted({syn for word, syn in FIELD_SYNONYMS.items() if re.search(rf"\b{word}\b", q)})
+    # Bridge Hindi field words into the English synonym lookup
+    for hi_word, en_key in HI_FIELD_BRIDGE.items():
+        if hi_word in query and en_key in FIELD_SYNONYMS:
+            fields = sorted(set(fields) | {FIELD_SYNONYMS[en_key]})
     if not fields:
         return None
     m = YEAR_RE.search(query)
@@ -1027,7 +1139,16 @@ def _rag_prompt(query: str, hits: list[dict], history: list[dict] | None = None)
     if history:
         turns = "\n".join(f"{t.get('role', 'user')}: {t.get('content', '')}" for t in history[-6:])
         prompt += f"Recent conversation context:\n{turns}\n\n"
-    prompt += f"Document Context:\n{context}\n\nIMPORTANT unit rule: when answering in Hindi, translate units faithfully - billion tonne = \u0905\u0930\u092c \u091f\u0928, million tonne = \u092e\u093f\u0932\u093f\u092f\u0928 \u091f\u0928, lakh tonne = \u0932\u093e\u0916 \u091f\u0928. Copy numeric values EXACTLY as they appear in the context; never convert or alter them.\n\nQuestion: {query}"
+    is_hindi = any('\u0900' <= c <= '\u097f' for c in query)
+    lang_rule = ""
+    if is_hindi:
+        lang_rule = (
+            "\n\nThe question is in Hindi. Answer in Hindi. The documents are in English \u2014 "
+            "translate the relevant facts into Hindi. Unit rules: billion tonne = \u0905\u0930\u092c \u091f\u0928, "
+            "million tonne = \u092e\u093f\u0932\u093f\u092f\u0928 \u091f\u0928, lakh tonne = \u0932\u093e\u0916 \u091f\u0928. "
+            "Copy numeric values EXACTLY from the context; never convert or alter them."
+        )
+    prompt += f"Document Context:\n{context}{lang_rule}\n\nQuestion: {query}"
     return prompt
 
 
@@ -1046,6 +1167,11 @@ def rag_stream(query: str, subsidiary: str = "", history: list[dict] | None = No
         if shift_res:
             shift_res["grounded_pct"] = 1.0
             meta_res = shift_res
+    if not meta_res:
+        cmp = lookup_comparison(query)
+        if cmp:
+            cmp["grounded_pct"] = 1.0
+            meta_res = cmp
     if not meta_res:
         fig = lookup_figures(query, subsidiary)
         if fig:
@@ -1111,6 +1237,11 @@ def answer(query: str, subsidiary: str = "", history: list[dict] | None = None) 
     if shift_res:
         shift_res["grounded_pct"] = 1.0
         return shift_res
+
+    cmp = lookup_comparison(query)
+    if cmp:
+        cmp["grounded_pct"] = 1.0
+        return cmp
 
     fig = lookup_figures(query, subsidiary)
     if fig:
