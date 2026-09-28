@@ -1,3 +1,4 @@
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -69,6 +70,14 @@ def _migrate():
             conn.execute(text("ALTER TABLE documents ADD COLUMN doc_date DATE"))
             conn.commit()
             print("[migrate] added documents.doc_date")
+        if dcols and "approved_by" not in dcols:
+            conn.execute(text("ALTER TABLE documents ADD COLUMN approved_by VARCHAR(200) DEFAULT ''"))
+            conn.commit()
+            print("[migrate] added documents.approved_by")
+        if dcols and "approved_at" not in dcols:
+            conn.execute(text("ALTER TABLE documents ADD COLUMN approved_at TIMESTAMPTZ"))
+            conn.commit()
+            print("[migrate] added documents.approved_at")
         fcols = [
             r[0]
             for r in conn.execute(
@@ -79,6 +88,10 @@ def _migrate():
             conn.execute(text("ALTER TABLE extraction_fields ADD COLUMN item VARCHAR(200) DEFAULT ''"))
             conn.commit()
             print("[migrate] added extraction_fields.item")
+        if fcols and "approved_by" not in fcols:
+            conn.execute(text("ALTER TABLE extraction_fields ADD COLUMN approved_by VARCHAR(200) DEFAULT ''"))
+            conn.commit()
+            print("[migrate] added extraction_fields.approved_by")
 
 
 def init_db():

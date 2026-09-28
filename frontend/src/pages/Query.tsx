@@ -12,6 +12,18 @@ type Msg = {
 
 const PRESETS = [
   {
+    tag: "Shift Sign-off & Approver",
+    label: "⏱️ Who approved shift on 08.09.2026? (Shift Sign-off)",
+    q: "Who approved the shift on 08.09.2026 and what were the production figures?",
+    sub: "",
+  },
+  {
+    tag: "Stoppage Report Sign-off",
+    label: "🚜 Mine-1 stoppage report approver (07.09.2026)",
+    q: "Who approved the stoppage report on 07.09.2026 for Mine-1?",
+    sub: "",
+  },
+  {
     tag: "Lok Sabha AU5084",
     label: "🏛️ Coal production trends in Odisha (AU5084)",
     q: "What was the coal production trend in Odisha according to Lok Sabha question 5084?",

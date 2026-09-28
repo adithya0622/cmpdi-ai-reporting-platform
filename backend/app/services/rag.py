@@ -1,3 +1,4 @@
+import datetime
 import re
 
 from sqlalchemy import text as sqltext
@@ -77,7 +78,7 @@ def search(query: str, subsidiary: str = "", top_k: int = 20) -> list[dict]:
     db = SessionLocal()
     try:
         base = (
-            "SELECT c.id, c.page, c.text, d.title, d.subsidiary "
+            "SELECT c.id, c.page, c.text, d.title, d.subsidiary, d.doc_type, d.approved_by, d.approved_at, d.doc_date "
             "FROM chunks c JOIN documents d ON d.id = c.document_id "
             "WHERE d.status LIKE 'indexed%' "
         )
@@ -118,6 +119,156 @@ def search(query: str, subsidiary: str = "", top_k: int = 20) -> list[dict]:
                 entry["score"] += score
         out = sorted(scores.values(), key=lambda x: -x["score"])[:top_k]
         return [{**v["row"], "score": round(v["score"], 4)} for v in out]
+    finally:
+        db.close()
+
+
+def lookup_shift(query: str, subsidiary: str = "") -> dict | None:
+    """Deterministic lookup for queries regarding mine shifts, relays, and shift approvals."""
+    q = query.lower()
+
+    # Parliamentary or annual inquiries route to RAG
+    if any(k in q for k in ("lok sabha", "rajya sabha", "parliament", "unstarred", "starred")):
+        return None
+
+    # Check if query is asking about a shift, relay, or approver
+    shift_triggers = (
+        "shift", "relay", "approved by", "who approved", "approver", "approval",
+        "in-charge", "in charge", "supervisor", "sign off", "signed off", "sign-off"
+    )
+    is_shift_query = any(t in q for t in shift_triggers)
+    if not is_shift_query:
+        return None
+
+    db = SessionLocal()
+    try:
+        qdate = parse_report_date(query)
+        if not qdate:
+            dm = re.search(r"\b(\d{1,2})[-./](\d{1,2})[-./]((?:20)?\d{2})\b", query)
+            if dm:
+                d_str, m_str, y_str = dm.group(1), dm.group(2), dm.group(3)
+                if len(y_str) == 2:
+                    y_str = "20" + y_str
+                try:
+                    qdate = datetime.date(int(y_str), int(m_str), int(d_str))
+                except Exception:
+                    pass
+
+        sql = (
+            "SELECT d.id, d.title, d.doc_type, d.subsidiary, d.doc_date, d.doc_year, d.approved_by, d.approved_at, d.meta "
+            "FROM documents d "
+            "WHERE d.doc_type IN ('daily_shift_report', 'stoppage_report') "
+        )
+        params: dict = {}
+        if qdate:
+            if isinstance(qdate, str):
+                parts = qdate.split("-")
+                qd_str = f"{parts[2]}-{parts[1]}-{parts[0]}" if len(parts) == 3 else qdate
+                qd_dot = f"{parts[2]}.{parts[1]}.{parts[0]}" if len(parts) == 3 else qdate
+            else:
+                qd_str = qdate.strftime("%d-%m-%Y")
+                qd_dot = qdate.strftime("%d.%m.%Y")
+            sql += "AND (d.doc_date = :qd OR d.title ILIKE :qd_str OR d.title ILIKE :qd_dot) "
+            params["qd"] = qdate
+            params["qd_str"] = f"%{qd_str}%"
+            params["qd_dot"] = f"%{qd_dot}%"
+        if subsidiary:
+            sql += "AND (d.subsidiary ILIKE :sub OR d.subsidiary = '' OR d.subsidiary IS NULL) "
+            params["sub"] = f"%{subsidiary}%"
+
+        if "b1" in q or "b-1" in q:
+            sql += "AND (d.title ILIKE '%b1%' OR d.title ILIKE '%b-1%' OR d.title ILIKE '%b 1%') "
+        if "mine-1" in q or "mine 1" in q or "mine_1" in q or "mine-i" in q or "mine i" in q or "m-1" in q:
+            sql += "AND (d.title ILIKE '%mine-1%' OR d.title ILIKE '%mine 1%' OR d.title ILIKE '%m1%' OR d.title ILIKE '%m-1%' OR d.title ILIKE '%mine_i%' OR d.title ILIKE '%mine-i%') "
+        elif "mine-2" in q or "mine 2" in q or "mine_2" in q or "mine-ii" in q or "mine ii" in q or "m-2" in q:
+            sql += "AND (d.title ILIKE '%mine-2%' OR d.title ILIKE '%mine 2%' OR d.title ILIKE '%m2%' OR d.title ILIKE '%m-2%' OR d.title ILIKE '%mine_ii%' OR d.title ILIKE '%mine-ii%') "
+
+        sql += "ORDER BY d.doc_date DESC NULLS LAST, d.created_at DESC LIMIT 3"
+        docs = db.execute(sqltext(sql), params).mappings().all()
+
+        if not docs and qdate:
+            sql_fallback = (
+                "SELECT d.id, d.title, d.doc_type, d.subsidiary, d.doc_date, d.doc_year, d.approved_by, d.approved_at, d.meta "
+                "FROM documents d "
+                "WHERE d.doc_type IN ('daily_shift_report', 'stoppage_report') "
+                "AND (d.doc_date = :qd OR d.title ILIKE :qd_str OR d.title ILIKE :qd_dot) "
+                "ORDER BY d.doc_date DESC NULLS LAST LIMIT 3"
+            )
+            docs = db.execute(sqltext(sql_fallback), params).mappings().all()
+
+        if not docs:
+            sql_any = (
+                "SELECT d.id, d.title, d.doc_type, d.subsidiary, d.doc_date, d.doc_year, d.approved_by, d.approved_at, d.meta "
+                "FROM documents d "
+                "WHERE d.doc_type IN ('daily_shift_report', 'stoppage_report') "
+                "ORDER BY d.doc_date DESC NULLS LAST, d.created_at DESC LIMIT 3"
+            )
+            docs = db.execute(sqltext(sql_any)).mappings().all()
+
+        if not docs:
+            return None
+
+        answers = []
+        sources = []
+        for d in docs:
+            fields = db.execute(
+                sqltext(
+                    "SELECT field_name, item, value_num, value_str, unit, approved_by, status "
+                    "FROM extraction_fields WHERE document_id = :did"
+                ),
+                {"did": d["id"]},
+            ).mappings().all()
+
+            f_dict = {}
+            field_approver = None
+            for f in fields:
+                val = f["value_num"] if f["value_num"] is not None else f["value_str"]
+                f_dict[f["field_name"]] = val
+                if f.get("approved_by") and not field_approver:
+                    field_approver = f["approved_by"]
+
+            approver = d["approved_by"] or field_approver or "Pending Verification / Approval"
+            app_date_str = f" on {d['approved_at'].strftime('%d.%m.%Y')}" if d["approved_at"] else ""
+            status_badge = "Approved & Signed Off" if approver != "Pending Verification / Approval" else "Pending Verification"
+
+            lines = [
+                f"Shift Report: {d['title']}",
+                f"• Approval Status: {status_badge}",
+                f"• Approved By: {approver}{app_date_str}",
+            ]
+            if d["doc_date"]:
+                lines.append(f"• Report Date: {d['doc_date']}")
+            if f_dict.get("mine"):
+                lines.append(f"• Mine / Section: Mine {f_dict.get('mine')}")
+            if f_dict.get("relay") or f_dict.get("shift"):
+                lines.append(f"• Relay / Shift: Relay {f_dict.get('relay', 'N/A')}, Shift {f_dict.get('shift', 'N/A')}")
+
+            metrics = []
+            if "total_lignite_mt" in f_dict and f_dict["total_lignite_mt"] is not None:
+                metrics.append(f"Total Lignite Production: {float(f_dict['total_lignite_mt']):,.2f} MT")
+            if "total_ob_m3" in f_dict and f_dict["total_ob_m3"] is not None:
+                metrics.append(f"Total Overburden (OB): {float(f_dict['total_ob_m3']):,.2f} m3")
+            if "power_generation_mw" in f_dict and f_dict["power_generation_mw"] is not None:
+                metrics.append(f"Thermal Power Supply: {float(f_dict['power_generation_mw']):,.2f} MT")
+            if "production_lt" in f_dict and f_dict["production_lt"] is not None:
+                metrics.append(f"Production: {float(f_dict['production_lt']):,.2f} lakh t")
+
+            if metrics:
+                lines.append("• Key Operational Figures:")
+                for m in metrics:
+                    lines.append(f"  - {m}")
+
+            answers.append("\n".join(lines))
+            sources.append({"title": d["title"], "page": 0, "subsidiary": d["subsidiary"] or "Mining Ops", "score": 1.0})
+
+        final_ans = "\n\n---\n\n".join(answers)
+        return {
+            "answer": final_ans,
+            "sources": sources,
+            "grounded": True,
+            "mode": "shift_figures",
+            "grounded_pct": 1.0,
+        }
     finally:
         db.close()
 
@@ -177,7 +328,7 @@ def lookup_figures(query: str, subsidiary: str = "") -> dict | None:
 
         for f in daily_fields:
             sql = (
-                "SELECT ef.value_num, ef.item, ef.unit, d.title, d.doc_date, d.doc_year "
+                "SELECT ef.value_num, ef.item, ef.unit, ef.approved_by, d.title, d.doc_date, d.doc_year, d.approved_by AS doc_approved_by "
                 "FROM extraction_fields ef JOIN documents d ON d.id = ef.document_id "
                 "WHERE ef.field_name = :f AND ef.value_num IS NOT NULL "
                 "AND ef.status IN ('auto', 'confirmed', 'review') "
@@ -196,7 +347,9 @@ def lookup_figures(query: str, subsidiary: str = "") -> dict | None:
             for r in db.execute(sqltext(sql), params).mappings().all():
                 when = f" on {r['doc_date']}" if r["doc_date"] else (f" ({r['doc_year']})" if r["doc_year"] else "")
                 item = f" [{r['item']}]" if r["item"] else ""
-                lines.append(f"{f}{item}: {r['value_num']:,.2f} {r['unit']}{when} - source: {r['title']}")
+                approver = r.get("approved_by") or r.get("doc_approved_by")
+                approver_str = f" (Approved by: {approver})" if approver else ""
+                lines.append(f"{f}{item}: {r['value_num']:,.2f} {r['unit']}{when}{approver_str} - source: {r['title']}")
                 sources.append({"title": r["title"], "page": 0, "subsidiary": "", "score": 1.0})
     finally:
         db.close()
@@ -226,6 +379,11 @@ def faithfulness(answer_text: str, hits: list[dict]) -> float:
 
 
 def answer(query: str, subsidiary: str = "", history: list[dict] | None = None) -> dict:
+    shift_res = lookup_shift(query, subsidiary)
+    if shift_res:
+        shift_res["grounded_pct"] = 1.0
+        return shift_res
+
     fig = lookup_figures(query, subsidiary)
     if fig:
         fig["grounded_pct"] = 1.0
@@ -239,13 +397,23 @@ def answer(query: str, subsidiary: str = "", history: list[dict] | None = None) 
     if not hits:
         return {"answer": "No relevant documents found in the indexed corpus.", "sources": [], "grounded": False, "mode": "rag", "grounded_pct": None}
     if llm.available():
-        context = "\n\n".join(f"[{h['title']} p.{h['page']}]\n{h['text']}" for h in hits)
+        context_parts = []
+        for h in hits:
+            hdr = f"[{h['title']} p.{h['page']}"
+            if h.get("approved_by"):
+                hdr += f" | Shift Approved By: {h['approved_by']}"
+            elif h.get("doc_type") in ("daily_shift_report", "stoppage_report"):
+                hdr += " | Shift Approval Status: Pending Verification"
+            hdr += "]"
+            context_parts.append(f"{hdr}\n{h['text']}")
+        context = "\n\n".join(context_parts)
         prompt = ""
         if history:
             turns = "\n".join(f"{t.get('role', 'user')}: {t.get('content', '')}" for t in history[-6:])
             prompt += f"Conversation so far:\n{turns}\n\n"
         prompt += (
             "Answer the question using ONLY the context below. Cite sources as [title p.page]. "
+            "If the question is about a mine shift, relay, or daily operational report, ALWAYS state the name of the person who approved the shift and the approval status. "
             "If the context does not contain the answer, say so.\n\n"
             f"Context:\n{context}\n\nQuestion: {query}"
         )

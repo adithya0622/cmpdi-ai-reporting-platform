@@ -35,6 +35,8 @@ class Document(Base):
     doc_date: Mapped[datetime.date | None] = mapped_column(Date, nullable=True)
     source_path: Mapped[str] = mapped_column(String(1000), default="")
     status: Mapped[str] = mapped_column(String(30), default="ingested")
+    approved_by: Mapped[str | None] = mapped_column(String(200), default="", nullable=True)
+    approved_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     meta: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
@@ -115,6 +117,7 @@ class ExtractionField(Base):
     unit: Mapped[str] = mapped_column(String(30), default="")
     confidence: Mapped[float] = mapped_column(Float, default=0.5)
     status: Mapped[str] = mapped_column(String(20), default="auto")
+    approved_by: Mapped[str | None] = mapped_column(String(200), default="", nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 

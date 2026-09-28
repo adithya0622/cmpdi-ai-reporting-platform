@@ -58,6 +58,24 @@ export default function Documents() {
     }
   }
 
+  async function approveShift(id: string, currentTitle: string, existingApprover?: string) {
+    const approver = prompt(
+      `Enter Approver Name (Mining Officer / Shift In-Charge) for "${currentTitle}":`,
+      existingApprover || "Er. Rajesh Kumar Verma (Shift In-Charge, Mine-1)"
+    );
+    if (!approver) return;
+    try {
+      await api(`/documents/${id}/approve`, {
+        method: "POST",
+        body: { approved_by: approver, notes: "Verified and signed off via Dashboard" },
+      });
+      setMsg(`Document approved by: ${approver}`);
+      load();
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
   return (
     <div className="page-inner">
       <div className="card">
@@ -81,7 +99,17 @@ export default function Documents() {
         <label>Filter by subsidiary</label>
         <input value={filterSub} onChange={(e) => setFilterSub(e.target.value)} />
         <table style={{ marginTop: 8 }}>
-          <thead><tr><th>Title</th><th>Subsidiary</th><th>Year</th><th>Date</th><th>Status</th><th>Extract</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Subsidiary</th>
+              <th>Year</th>
+              <th>Date</th>
+              <th>Approved By</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
           <tbody>
             {docs.map((d) => (
               <tr key={d.id}>
@@ -89,11 +117,45 @@ export default function Documents() {
                 <td>{d.subsidiary}</td>
                 <td>{d.doc_year ?? ""}</td>
                 <td>{d.doc_date ?? ""}</td>
+                <td>
+                  {d.approved_by ? (
+                    <span
+                      style={{
+                        display: "inline-block",
+                        background: "rgba(16, 185, 129, 0.12)",
+                        color: "#10b981",
+                        border: "1px solid rgba(16, 185, 129, 0.3)",
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                      title="Click to edit approver"
+                      onClick={() => approveShift(d.id, d.title, d.approved_by)}
+                    >
+                      ✓ {d.approved_by}
+                    </span>
+                  ) : (
+                    <button
+                      className="small"
+                      style={{ borderColor: "#6366f1", color: "#818cf8" }}
+                      onClick={() => approveShift(d.id, d.title)}
+                    >
+                      Approve Shift
+                    </button>
+                  )}
+                </td>
                 <td>{d.status}</td>
-                <td><button className="small" onClick={() => extract(d.id)}>Extract</button></td>
+                <td style={{ display: "flex", gap: 6 }}>
+                  <button className="small" onClick={() => extract(d.id)}>Extract</button>
+                  {!d.approved_by && (
+                    <button className="small" onClick={() => approveShift(d.id, d.title)}>Approve</button>
+                  )}
+                </td>
               </tr>
             ))}
-            {!docs.length && <tr><td>No documents yet.</td></tr>}
+            {!docs.length && <tr><td colSpan={7}>No documents yet.</td></tr>}
           </tbody>
         </table>
       </div>

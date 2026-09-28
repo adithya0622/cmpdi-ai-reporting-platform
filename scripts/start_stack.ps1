@@ -17,24 +17,37 @@ if (-not $SkipPostgres) {
     Write-Host "[1/4] postgres: skipped"
 }
 
+$Root = Split-Path -Parent $PSScriptRoot
+$BackendDir = Join-Path $Root "backend"
+$VenvPython = Join-Path $Root ".venv\Scripts\python.exe"
+$PidFile = Join-Path $Root "backend.pid"
+$DataDir = Join-Path $Root "data"
+$LlmDir = Join-Path $DataDir "llm"
+$WorkerPy = Join-Path $Root "scripts\worker.py"
+
 Write-Host "[2/4] llama-server (:8001)..."
+$llamaExe = Join-Path $LlmDir "llama-server.exe"
+$llamaModel = Join-Path $LlmDir "qwen2.5-3b-instruct-q4_k_m.gguf"
+$llamaLog = Join-Path $LlmDir "server.err.log"
 $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-    # --parallel 1: one slot owns the full 8192 context. Multi-slot servers split -c across
-    # slots, which caused "Context size has been exceeded" failures on concurrent extractions.
-    CommandLine = 'cmd /c D:\PS2\data\llm\llama-server.exe -m D:\PS2\data\llm\qwen2.5-3b-instruct-q4_k_m.gguf --port 8001 -c 8192 -ngl 99 --parallel 1 --host 0.0.0.0 2>>D:\PS2\data\llm\server.err.log'
+    CommandLine = "cmd /c `"$llamaExe`" -m `"$llamaModel`" --port 8001 -c 8192 -ngl 99 --parallel 1 --host 0.0.0.0 2>>`"$llamaLog`""
 }
 Write-Host "      launched rc=$($r.ReturnValue)"
 
 Write-Host "[3/4] backend (:8000)..."
+$uvOutLog = Join-Path $DataDir "uvicorn.out.log"
+$uvErrLog = Join-Path $DataDir "uvicorn.err.log"
 $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-    CommandLine = 'cmd /c ""cd /d D:\PS2\backend && D:\PS2\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 1>>D:\PS2\data\uvicorn.out.log 2>>D:\PS2\data\uvicorn.err.log""'
+    CommandLine = "cmd /c cd /d `"$BackendDir`" && `"$VenvPython`" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 1>>`"$uvOutLog`" 2>>`"$uvErrLog`""
 }
-Set-Content -Path D:\PS2\backend.pid -Value $r.ProcessId
+Set-Content -Path $PidFile -Value $r.ProcessId
 Write-Host "      launched rc=$($r.ReturnValue)"
 
 Write-Host "[4/4] job worker..."
+$wOutLog = Join-Path $DataDir "worker.out.log"
+$wErrLog = Join-Path $DataDir "worker.err.log"
 $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-    CommandLine = 'cmd /c ""cd /d D:\PS2\backend && D:\PS2\.venv\Scripts\python.exe D:\PS2\scripts\worker.py 1>>D:\PS2\data\worker.out.log 2>>D:\PS2\data\worker.err.log""'
+    CommandLine = "cmd /c cd /d `"$BackendDir`" && `"$VenvPython`" `"$WorkerPy`" 1>>`"$wOutLog`" 2>>`"$wErrLog`""
 }
 Write-Host "      launched rc=$($r.ReturnValue)"
 

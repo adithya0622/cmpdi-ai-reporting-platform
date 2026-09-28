@@ -3,6 +3,7 @@ import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy import text as sqltext
 
 from ..auth import require_min_role, scoped_subsidiary
@@ -58,6 +59,11 @@ def upload(
     return {"job_id": str(job_id), "status": "queued"}
 
 
+class ApproveDocIn(BaseModel):
+    approved_by: str = ""
+    notes: str = ""
+
+
 @router.get("")
 def list_documents(
     subsidiary: str = "",
@@ -69,7 +75,7 @@ def list_documents(
     subsidiary = scoped_subsidiary(user, subsidiary)
     db = SessionLocal()
     try:
-        q = "SELECT id, title, doc_type, subsidiary, doc_year, doc_date, status, created_at FROM documents WHERE 1=1"
+        q = "SELECT id, title, doc_type, subsidiary, doc_year, doc_date, status, approved_by, approved_at, created_at FROM documents WHERE 1=1"
         params: dict = {"limit": limit, "offset": offset}
         if subsidiary:
             q += " AND subsidiary = :sub"
@@ -80,5 +86,56 @@ def list_documents(
         q += " ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
         rows = db.execute(sqltext(q), params).mappings().all()
         return [dict(r) for r in rows]
+    finally:
+        db.close()
+
+
+@router.post("/{doc_id}/approve")
+def approve_document(doc_id: str, body: ApproveDocIn, user=Depends(require_min_role("analyst"))):
+    from ..models import Document, ExtractionField
+    from ..services.audit import log as audit_log
+
+    db = SessionLocal()
+    try:
+        try:
+            uid = uuid.UUID(doc_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid document id")
+        doc = db.get(Document, uid)
+        if not doc:
+            raise HTTPException(status_code=404, detail="document not found")
+
+        approver = body.approved_by.strip() or f"{user.username} (Verified Officer)"
+        now = datetime.datetime.now(datetime.timezone.utc)
+        doc.approved_by = approver
+        doc.approved_at = now
+        meta = dict(doc.meta or {})
+        meta["approved_by"] = approver
+        meta["approved_at"] = now.isoformat()
+        if body.notes:
+            meta["approval_notes"] = body.notes.strip()
+        doc.meta = meta
+
+        # Also confirm all extraction fields associated with this shift document
+        db.query(ExtractionField).filter(ExtractionField.document_id == doc.id).update({
+            ExtractionField.approved_by: approver,
+            ExtractionField.status: "confirmed",
+            ExtractionField.confidence: 1.0,
+        })
+        db.commit()
+
+        audit_log("shift_approval", user.username, {
+            "document_id": doc_id,
+            "approved_by": approver,
+            "title": doc.title,
+            "notes": body.notes,
+        })
+        return {
+            "id": str(doc.id),
+            "title": doc.title,
+            "status": "approved",
+            "approved_by": approver,
+            "approved_at": now.isoformat(),
+        }
     finally:
         db.close()

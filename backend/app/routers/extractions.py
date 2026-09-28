@@ -20,6 +20,7 @@ class RunIn(BaseModel):
 class ReviewIn(BaseModel):
     action: str  # "confirm" | "reject"
     value: float | str | None = None
+    approved_by: str | None = None
 
 
 @router.post("/run")
@@ -80,7 +81,8 @@ def review_queue(_user=Depends(require_min_role("viewer"))):
         rows = db.execute(
             sqltext(
                 "SELECT f.id, f.field_name, f.item, f.value_num, f.value_str, f.unit, f.confidence, f.status, "
-                "f.document_id, d.title FROM extraction_fields f JOIN documents d ON d.id = f.document_id "
+                "f.approved_by, f.document_id, d.title, d.doc_type, d.approved_by AS doc_approved_by "
+                "FROM extraction_fields f JOIN documents d ON d.id = f.document_id "
                 "WHERE f.status = 'review' ORDER BY f.confidence ASC LIMIT 200"
             )
         ).mappings().all()
@@ -91,6 +93,8 @@ def review_queue(_user=Depends(require_min_role("viewer"))):
 
 @router.post("/fields/{field_id}/review")
 def review_field(field_id: int, body: ReviewIn, user=Depends(require_min_role("analyst"))):
+    import datetime
+    from ..models import Document
     from ..services.audit import log as audit_log
 
     db = SessionLocal()
@@ -98,6 +102,7 @@ def review_field(field_id: int, body: ReviewIn, user=Depends(require_min_role("a
         f = db.get(ExtractionField, field_id)
         if not f:
             raise HTTPException(status_code=404, detail="field not found")
+        approver = (body.approved_by or "").strip() or f"{user.username} (Verified Officer)"
         if body.action == "reject":
             f.status = "rejected"
         elif body.action == "confirm":
@@ -110,11 +115,26 @@ def review_field(field_id: int, body: ReviewIn, user=Depends(require_min_role("a
                 f.value_str = body.value.strip()
             f.status = "confirmed"
             f.confidence = 1.0
+            f.approved_by = approver
+            
+            # Synchronize to document
+            doc = db.get(Document, f.document_id)
+            if doc:
+                doc.approved_by = approver
+                doc.approved_at = datetime.datetime.now(datetime.timezone.utc)
+                if not doc.meta:
+                    doc.meta = {}
+                doc.meta["approved_by"] = approver
         else:
             raise HTTPException(status_code=400, detail="action must be 'confirm' or 'reject'")
         db.commit()
-        audit_log("review", user.username, {"field_id": field_id, "action": body.action, "value": body.value})
-        return {"id": f.id, "status": f.status}
+        audit_log("review", user.username, {
+            "field_id": field_id,
+            "action": body.action,
+            "value": body.value,
+            "approved_by": approver,
+        })
+        return {"id": f.id, "status": f.status, "approved_by": f.approved_by}
     finally:
         db.close()
 
