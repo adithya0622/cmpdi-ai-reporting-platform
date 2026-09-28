@@ -32,7 +32,7 @@ def _rows(subsidiary: str = "", year_from: int | None = None, year_to: int | Non
     try:
         q = (
             "SELECT d.subsidiary, d.doc_year, c.text FROM chunks c "
-            "JOIN documents d ON d.id = c.document_id WHERE d.status LIKE 'indexed%'"
+            "JOIN documents d ON d.id = c.document_id WHERE (d.status IN ('indexed', 'approved') OR d.status LIKE 'indexed%')"
         )
         params: dict = {}
         if subsidiary:

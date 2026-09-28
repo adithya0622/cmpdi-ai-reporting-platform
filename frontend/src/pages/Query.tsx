@@ -170,7 +170,7 @@ export default function Query() {
                   {m.mode === "figures" ? (
                     <span className="badge badge-sql">⚡ Deterministic SQL Query (Zero Hallucination)</span>
                   ) : (
-                    <span className="badge badge-rag">🧠 Hybrid Vector RAG (Qwen 2.5 3B)</span>
+                    <span className="badge badge-rag">🧠 Sovereign Hybrid RAG (Qwen 9B GPU)</span>
                   )}
 
                   {m.latency_ms != null && (
