@@ -105,6 +105,7 @@ export default function Documents() {
               <th>Subsidiary</th>
               <th>Year</th>
               <th>Date</th>
+              <th>Specified By</th>
               <th>Approved By</th>
               <th>Status</th>
               <th>Actions</th>
@@ -117,6 +118,27 @@ export default function Documents() {
                 <td>{d.subsidiary}</td>
                 <td>{d.doc_year ?? ""}</td>
                 <td>{d.doc_date ?? ""}</td>
+                <td>
+                  {d.specified_by ? (
+                    <span
+                      style={{
+                        display: "inline-block",
+                        background: "rgba(99, 102, 241, 0.12)",
+                        color: "#818cf8",
+                        border: "1px solid rgba(99, 102, 241, 0.3)",
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                      }}
+                      title="Shift In-Charge / Overman who specified operational targets"
+                    >
+                      {d.specified_by}
+                    </span>
+                  ) : (
+                    <span style={{ color: "#6b7280", fontSize: "0.8rem" }}>—</span>
+                  )}
+                </td>
                 <td>
                   {d.approved_by ? (
                     <span
@@ -155,7 +177,7 @@ export default function Documents() {
                 </td>
               </tr>
             ))}
-            {!docs.length && <tr><td colSpan={7}>No documents yet.</td></tr>}
+            {!docs.length && <tr><td colSpan={8}>No documents yet.</td></tr>}
           </tbody>
         </table>
       </div>

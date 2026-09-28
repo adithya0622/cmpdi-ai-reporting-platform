@@ -81,7 +81,7 @@ def review_queue(_user=Depends(require_min_role("viewer"))):
         rows = db.execute(
             sqltext(
                 "SELECT f.id, f.field_name, f.item, f.value_num, f.value_str, f.unit, f.confidence, f.status, "
-                "f.approved_by, f.document_id, d.title, d.doc_type, d.approved_by AS doc_approved_by "
+                "f.specified_by, f.approved_by, f.document_id, d.title, d.doc_type, d.specified_by AS doc_specified_by, d.approved_by AS doc_approved_by "
                 "FROM extraction_fields f JOIN documents d ON d.id = f.document_id "
                 "WHERE f.status = 'review' ORDER BY f.confidence ASC LIMIT 200"
             )

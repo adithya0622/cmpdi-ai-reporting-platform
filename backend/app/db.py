@@ -78,6 +78,10 @@ def _migrate():
             conn.execute(text("ALTER TABLE documents ADD COLUMN approved_at TIMESTAMPTZ"))
             conn.commit()
             print("[migrate] added documents.approved_at")
+        if dcols and "specified_by" not in dcols:
+            conn.execute(text("ALTER TABLE documents ADD COLUMN specified_by VARCHAR(200) DEFAULT ''"))
+            conn.commit()
+            print("[migrate] added documents.specified_by")
         fcols = [
             r[0]
             for r in conn.execute(
@@ -92,6 +96,10 @@ def _migrate():
             conn.execute(text("ALTER TABLE extraction_fields ADD COLUMN approved_by VARCHAR(200) DEFAULT ''"))
             conn.commit()
             print("[migrate] added extraction_fields.approved_by")
+        if fcols and "specified_by" not in fcols:
+            conn.execute(text("ALTER TABLE extraction_fields ADD COLUMN specified_by VARCHAR(200) DEFAULT ''"))
+            conn.commit()
+            print("[migrate] added extraction_fields.specified_by")
 
 
 def init_db():

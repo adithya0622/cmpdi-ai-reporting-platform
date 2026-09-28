@@ -60,6 +60,7 @@ def upload(
 
 
 class ApproveDocIn(BaseModel):
+    specified_by: str = ""
     approved_by: str = ""
     notes: str = ""
 
@@ -75,7 +76,7 @@ def list_documents(
     subsidiary = scoped_subsidiary(user, subsidiary)
     db = SessionLocal()
     try:
-        q = "SELECT id, title, doc_type, subsidiary, doc_year, doc_date, status, approved_by, approved_at, created_at FROM documents WHERE 1=1"
+        q = "SELECT id, title, doc_type, subsidiary, doc_year, doc_date, status, specified_by, approved_by, approved_at, created_at FROM documents WHERE 1=1"
         params: dict = {"limit": limit, "offset": offset}
         if subsidiary:
             q += " AND subsidiary = :sub"
@@ -83,7 +84,7 @@ def list_documents(
         if doc_type:
             q += " AND doc_type = :dt"
             params["dt"] = doc_type
-        q += " ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+        q += " ORDER BY doc_date DESC NULLS LAST, created_at DESC LIMIT :limit OFFSET :offset"
         rows = db.execute(sqltext(q), params).mappings().all()
         return [dict(r) for r in rows]
     finally:
@@ -106,26 +107,35 @@ def approve_document(doc_id: str, body: ApproveDocIn, user=Depends(require_min_r
             raise HTTPException(status_code=404, detail="document not found")
 
         approver = body.approved_by.strip() or f"{user.username} (Verified Officer)"
+        specifier = body.specified_by.strip() or doc.specified_by or ""
         now = datetime.datetime.now(datetime.timezone.utc)
         doc.approved_by = approver
+        if specifier:
+            doc.specified_by = specifier
         doc.approved_at = now
         meta = dict(doc.meta or {})
         meta["approved_by"] = approver
+        if specifier:
+            meta["specified_by"] = specifier
         meta["approved_at"] = now.isoformat()
         if body.notes:
             meta["approval_notes"] = body.notes.strip()
         doc.meta = meta
 
         # Also confirm all extraction fields associated with this shift document
-        db.query(ExtractionField).filter(ExtractionField.document_id == doc.id).update({
+        update_vals = {
             ExtractionField.approved_by: approver,
             ExtractionField.status: "confirmed",
             ExtractionField.confidence: 1.0,
-        })
+        }
+        if specifier:
+            update_vals[ExtractionField.specified_by] = specifier
+        db.query(ExtractionField).filter(ExtractionField.document_id == doc.id).update(update_vals)
         db.commit()
 
         audit_log("shift_approval", user.username, {
             "document_id": doc_id,
+            "specified_by": specifier,
             "approved_by": approver,
             "title": doc.title,
             "notes": body.notes,
@@ -134,6 +144,7 @@ def approve_document(doc_id: str, body: ApproveDocIn, user=Depends(require_min_r
             "id": str(doc.id),
             "title": doc.title,
             "status": "approved",
+            "specified_by": specifier,
             "approved_by": approver,
             "approved_at": now.isoformat(),
         }
