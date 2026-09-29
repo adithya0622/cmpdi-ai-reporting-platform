@@ -40,6 +40,10 @@ def infer_doc_type(filename: str, first_page_text: str = "") -> str:
         return "geological"
     if "question" in name or "lok sabha" in name or "rajya sabha" in name:
         return "parliamentary_q"
+    if any(k in name for k in ("memo", "memorandum", "circular", "office order", "administrative")):
+        return "administrative_memo"
+    if any(k in page for k in ("memorandum", "circular", "office order", "office memo")):
+        return "administrative_memo"
     return "other"
 
 

@@ -6,7 +6,7 @@ from sqlalchemy import text as sqltext
 from ..config import settings
 from ..db import SessionLocal
 from ..extraction_schemas import field_period_type, parse_report_date
-from . import embeddings, llm, rerank
+from . import embeddings, llm, rerank, text_to_sql
 from .analytics import STOP
 
 WORD_RE = re.compile(r"[a-z\u0900-\u097F]{3,}")
@@ -799,6 +799,16 @@ def lookup_roster_or_approvers(query: str, history: list[dict] | None = None) ->
 _CIL_SUBSIDIARIES_RE = re.compile(r"\b(ecl|bccl|ccl|ncl|secl|mcl|wcl|nlc|cil)\b", re.I)
 
 
+def _resolve_metric_word(text: str) -> str | None:
+    """Map a metric keyword in free text to its extraction-field name via
+    FIELD_SYNONYMS ('coal production' -> production_lt). Returns the first match."""
+    t = (text or "").lower()
+    for word, field in FIELD_SYNONYMS.items():
+        if re.search(rf"\b{re.escape(word)}\b", t):
+            return field
+    return None
+
+
 def _resolve_anaphora(query: str, history: list[dict] | None) -> dict:
     """Resolve anaphoric references ('those shifts', 'these years') and vague
     follow-ups ('go through the data', 'tell me') by scanning conversation history.
@@ -815,6 +825,21 @@ def _resolve_anaphora(query: str, history: list[dict] | None) -> dict:
     is_subsidiary_switch = bool(re.search(r"\b(?:what\s+about|and\s+for|same\s+(?:thing\s+)?(?:for|but))\b", q))
     if not has_anaphora and not is_vague_followup and not is_subsidiary_switch:
         return ctx
+
+    # Pass 1 - subsidiary scope: only what the USER explicitly named, most recent
+    # user mention wins. Assistant answers list many subsidiaries (roster and
+    # production summaries); inheriting from them poisoned the scope: the
+    # follow-up "so how many shifts took place in those years" silently inherited
+    # 'NCL' from a list and answered with a single document.
+    for msg in reversed(history[-6:]):
+        if msg.get("role") != "user":
+            continue
+        subs = _CIL_SUBSIDIARIES_RE.findall((msg.get("content") or "").lower())
+        if subs:
+            ctx["subsidiary"] = subs[-1].upper()
+            break
+
+    # Pass 2 - topic signals (assistant answers MAY contribute these safely).
     for msg in reversed(history[-6:]):
         content = (msg.get("content") or "").lower()
         if "shift" in content or "stoppage" in content:
@@ -823,15 +848,56 @@ def _resolve_anaphora(query: str, history: list[dict] | None) -> dict:
             ctx["has_production_context"] = True
         if re.search(r"\b(?:appro\w*|sign\w*|certif\w*|who\s+(?:approved|signed))\b", content):
             ctx["has_approver_question"] = True
-        subs = _CIL_SUBSIDIARIES_RE.findall(content)
-        if subs and "subsidiary" not in ctx:
-            ctx["subsidiary"] = subs[-1].upper()
-        years = YEAR_RE.findall(content)
+        years = [m.group(0) for m in YEAR_RE.finditer(content)]
         if years and "year_range" not in ctx:
             ctx["year_range"] = (min(years), max(years))
         if ctx.get("topic"):
             break
     return ctx
+
+
+def _resolve_topic_metric(query: str, history: list[dict] | None) -> dict:
+    """Conversation-aware resolution of WHAT the user is asking about, generic over
+    the corpus: derive (field_name, subsidiary, year_range) from (a) the current
+    query and (b) the last user + assistant turns. This is what lets a bare
+    follow-up like 'so what is the total' inherit the metric of the previous
+    question ('quarterly production of BCCL in 2024') instead of falling to
+    generic RAG."""
+    q = (query or "").lower()
+    out: dict = {"field": None, "subsidiary": "", "years": None}
+
+    # 1. field from current query, else from recent history (user first, then assistant)
+    out["field"] = _resolve_metric_word(q)
+    if not out["field"] and history:
+        for msg in reversed(history[-4:]):
+            out["field"] = _resolve_metric_word((msg.get("content") or ""))
+            if out["field"]:
+                break
+
+    # 2. subsidiary from current query, else from the last USER turn
+    subs = _CIL_SUBSIDIARIES_RE.findall(q)
+    if subs:
+        out["subsidiary"] = subs[-1].upper()
+    elif history:
+        for msg in reversed(history[-4:]):
+            if msg.get("role") != "user":
+                continue
+            subs = _CIL_SUBSIDIARIES_RE.findall((msg.get("content") or "").lower())
+            if subs:
+                out["subsidiary"] = subs[-1].upper()
+                break
+
+    # 3. years from current query, else recent history (any role)
+    years = sorted({int(m.group(0)) for m in YEAR_RE.finditer(q)})
+    if not years and history:
+        for msg in reversed(history[-4:]):
+            ys = sorted({int(m.group(0)) for m in YEAR_RE.finditer((msg.get("content") or ""))})
+            if ys:
+                years = ys
+                break
+    if years:
+        out["years"] = (years[0], years[-1])
+    return out
 
 
 def _gather_shift_count_context(query: str, subsidiary: str = "", anaphora: dict | None = None) -> str | None:
@@ -884,6 +950,17 @@ def _gather_shift_count_context(query: str, subsidiary: str = "", anaphora: dict
             by_month = by_month.filter(Document.subsidiary.ilike(f"%{subsidiary}%"))
         by_month = by_month.group_by("month").order_by(sqltext("month DESC")).limit(12).all()
 
+        by_year = db.query(
+            func.to_char(Document.doc_date, 'YYYY').label("yr"),
+            func.count(Document.id).label("n"),
+        ).filter(
+            Document.doc_type.in_(["daily_shift_report", "stoppage_report"]),
+            Document.doc_date != None,
+        )
+        if subsidiary:
+            by_year = by_year.filter(Document.subsidiary.ilike(f"%{subsidiary}%"))
+        by_year = by_year.group_by("yr").order_by(sqltext("yr ASC")).all()
+
         date_range = db.query(
             func.min(Document.doc_date), func.max(Document.doc_date)
         ).filter(
@@ -908,6 +985,10 @@ def _gather_shift_count_context(query: str, subsidiary: str = "", anaphora: dict
         ]
         if min_date and max_date:
             lines.append(f"Date range: {min_date.strftime('%d.%m.%Y')} to {max_date.strftime('%d.%m.%Y')}")
+        if by_year:
+            lines.append("Year-wise breakdown (ALL years covered):")
+            for y in by_year:
+                lines.append(f"  {y.yr}: {y.n} shift operations")
         if by_month:
             lines.append("Monthly breakdown (most recent):")
             for m in by_month[:8]:
@@ -959,80 +1040,86 @@ def _gather_top_approver_context(query: str, subsidiary: str = "", anaphora: dic
         db.close()
 
 
-def _gather_aggregate_production_context(query: str, subsidiary: str = "", anaphora: dict | None = None) -> str | None:
-    """If query asks for total/accumulated production across shifts, gather SUM
-    from DB and return as context for the LLM. Returns None if query doesn't match."""
+def _gather_aggregate_production_context(query: str, subsidiary: str = "", anaphora: dict | None = None, history: list[dict] | None = None) -> str | None:
+    """If query asks for a total/aggregate of a metric, SUM the matching extraction
+    field from the DB and return the rows as context for the LLM. The metric,
+    subsidiary and year scope are resolved from the query AND the conversation
+    (via _resolve_topic_metric), so a follow-up like 'so what is the total' after
+    'quarterly production of BCCL in 2024' sums production_lt for BCCL/2024 -
+    whatever field and doc type hold it, nothing hardcoded."""
     q = query.lower()
     anaphora = anaphora or {}
-    has_production_word = bool(re.search(
-        r"\b(?:coal|lignite|production|overburden|ob|mined|extracted|accumulated|output)\b", q
-    ))
-    if not has_production_word and not anaphora.get("has_production_context"):
-        return None
+    topic = _resolve_topic_metric(query, history)
+    field = topic.get("field")
     has_aggregate_intent = bool(re.search(
-        r"\b(?:total|accumulated?|overall|sum|cumulative|combined|how\s+much|all\s+(?:the\s+)?shifts?)\b", q
+        r"\b(?:total|totle|accumulated?|overall|sum|cumulative|combined|how\s+much|all\s+(?:the\s+)?shifts?)\b", q
     ))
-    if not has_aggregate_intent and anaphora.get("topic") != "shifts":
+    if not field and anaphora.get("has_production_context"):
+        # legacy path: no resolvable field, but conversation is production-flavoured
+        # - fall back to the daily-shift lignite/OB/power aggregate
+        field = "total_lignite_mt"
+    if not field:
+        return None
+    if not has_aggregate_intent and anaphora.get("topic") != "shifts" and not (
+        topic.get("years") or topic.get("subsidiary")
+    ):
         return None
     has_specific_date = bool(re.search(r"\b\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}\b", q))
     if has_specific_date:
         return None
 
+    scope_sub = topic.get("subsidiary") or subsidiary or ""
+    years = topic.get("years")
+
     db = SessionLocal()
     try:
-        from sqlalchemy import func
-        from ..models import Document
+        from .extraction import field_unit
 
-        agg_fields = [
-            ("total_lignite_mt", "Total lignite production", "MT"),
-            ("total_ob_m3", "Total overburden removal", "m3"),
-            ("power_generation_mw", "Total thermal power supply", "MW"),
-        ]
-        base_filter = (
-            "SELECT SUM(ef.value_num) AS total, COUNT(DISTINCT d.id) AS n_shifts, "
-            "MIN(d.doc_date) AS from_date, MAX(d.doc_date) AS to_date "
+        # Generic per-document rows for the resolved field. The human-readable
+        # period (e.g. 'Quarter 1 2024') is stored as a sibling extraction row
+        # (field_name='period'), so LEFT JOIN it per document; doc_year covers
+        # documents without a period row.
+        sql = (
+            "SELECT COALESCE(p.period, CAST(d.doc_year AS varchar), d.title) AS period, "
+            "SUM(ef.value_num) AS total, COUNT(*) AS n_records, "
+            "MAX(d.title) AS title "
             "FROM extraction_fields ef "
             "JOIN documents d ON d.id = ef.document_id "
-            "WHERE d.doc_type = 'daily_shift_report' "
-            "AND ef.field_name = :field AND ef.value_num IS NOT NULL "
+            "LEFT JOIN ( "
+            "  SELECT document_id, MAX(value_str) AS period FROM extraction_fields "
+            "  WHERE field_name = 'period' GROUP BY document_id " ") p ON p.document_id = d.id "
+            "WHERE ef.field_name = :field AND ef.value_num IS NOT NULL "
+            "AND ef.status IN ('auto','confirmed') "
         )
-        params: dict = {}
-        if subsidiary:
-            base_filter += "AND (d.subsidiary ILIKE :sub OR d.subsidiary = '' OR d.subsidiary IS NULL) "
-            params["sub"] = f"%{subsidiary}%"
-
-        results = []
-        n_shifts = 0
-        from_date = None
-        to_date = None
-        for field_name, label, unit in agg_fields:
-            row = db.execute(
-                sqltext(base_filter), {**params, "field": field_name}
-            ).mappings().first()
-            if row and row["total"] is not None:
-                results.append((label, row["total"], row["n_shifts"], unit))
-                if row["n_shifts"] > n_shifts:
-                    n_shifts = row["n_shifts"]
-                if row["from_date"]:
-                    from_date = row["from_date"] if not from_date else min(from_date, row["from_date"])
-                if row["to_date"]:
-                    to_date = row["to_date"] if not to_date else max(to_date, row["to_date"])
-
-        if not results:
+        params: dict = {"field": field}
+        if scope_sub:
+            sql += "AND (d.subsidiary ILIKE :sub OR ef.subsidiary ILIKE :sub OR d.subsidiary = '') "
+            params["sub"] = f"%{scope_sub}%"
+        if years:
+            sql += "AND d.doc_year BETWEEN :y0 AND :y1 "
+            params["y0"], params["y1"] = years[0], years[1]
+        sql += "GROUP BY 1, d.doc_year ORDER BY d.doc_year ASC NULLS LAST, 1 ASC LIMIT 60"
+        rows = db.execute(sqltext(sql), params).mappings().all()
+        if not rows:
             return None
 
-        sub_label = subsidiary.upper() if subsidiary else "all subsidiaries"
-        date_str = ""
-        if from_date and to_date:
-            date_str = f" from {from_date.strftime('%d.%m.%Y')} to {to_date.strftime('%d.%m.%Y')}"
-        lines = [
-            f"[Aggregate Production Data from Shift Reports — {sub_label}]",
-            f"Data covers {n_shifts} daily shift reports{date_str}.",
-            f"Note: In CIL/NLC India mine operations, 'lignite' is the type of coal mined. When the user asks about 'coal', the lignite production figure is the answer.",
-        ]
-        for label, total_val, count, unit in results:
-            lines.append(f"{label} across all shifts: {total_val:,.2f} {unit} (sum of {count} daily records)")
+        total_all = sum(float(r["total"] or 0) for r in rows)
+        n_records = sum(int(r["n_records"] or 0) for r in rows)
+        unit = field_unit(field) or "units"
+        sub_label = scope_sub.upper() if scope_sub else "all subsidiaries"
+        yr_note = f" for {years[0]}" if years and years[0] == years[1] else (f" for {years[0]}-{years[1]}" if years else "")
 
+        lines = [
+            f"[Aggregate data for field '{field}' from verified extraction records \u2014 {sub_label}{yr_note}]",
+            f"TOTAL across all {n_records} verified records{yr_note}: {total_all:,.2f} {unit}",
+            "Breakdown by period as stored in the database:",
+        ]
+        for r in rows:
+            title_note = f" (source: {r['title']})" if r.get("title") else ""
+            lines.append(f"  {r['period']}: {float(r['total'] or 0):,.2f} {unit}{title_note}")
+        lines.append(
+            "Answer with the TOTAL and the period breakdown. Cite the source documents listed above."
+        )
         return "\n".join(lines)
     finally:
         db.close()
@@ -1638,8 +1725,19 @@ def lookup_figures(query: str, subsidiary: str = "") -> dict | None:
         db.close()
     if not lines:
         return None
-    ans = "Extracted figures" + (f" for {year}" if year else "") + (f" on {qdate}" if qdate else "") + ":\n" + "\n".join(lines[:20])
-    return {"answer": ans, "sources": sources[:8], "grounded": True, "mode": "figures"}
+    raw_context = "Extracted figures" + (f" for {year}" if year else "") + (f" on {qdate}" if qdate else "") + ":\n" + "\n".join(lines[:20])
+    if llm.available():
+        prose = llm.chat(
+            _DB_LLM_PROMPT
+            + f"Database Records:\n{raw_context}\n\nQuestion: {query}",
+            max_tokens=512,
+        )
+        grounded_pct = _verify_grounding(prose, raw_context)
+        ans = prose if grounded_pct >= _GROUNDING_THRESHOLD else raw_context
+    else:
+        ans = raw_context
+        grounded_pct = 1.0
+    return {"answer": ans, "sources": sources[:8], "grounded": True, "mode": "figures", "grounded_pct": round(grounded_pct, 2)}
 
 
 def faithfulness(answer_text: str, hits: list[dict]) -> float:
@@ -1867,12 +1965,21 @@ def rag_stream(query: str, subsidiary: str = "", history: list[dict] | None = No
         handler_map = {
             "shift_count": _gather_shift_count_context,
             "top_approver": _gather_top_approver_context,
-            "aggregate_production": _gather_aggregate_production_context,
+            "aggregate_production": lambda qq, ss, aa: _gather_aggregate_production_context(qq, ss, aa, history=history),
             "ranked_shift": _gather_ranked_shift_context,
         }
         db_ctx = handler_map[intent](query, subsidiary, anaphora)
         if db_ctx:
             yield from _llm_stream_from_context(query, db_ctx, history=history)
+            return
+
+    # Follow-up rescue: a bare aggregation probe ('so what is the total') after a
+    # data answer has no aggregate keyword in HISTORY for the classifier - try
+    # the aggregate gatherer before dropping to RAG.
+    if intent == "rag" and history:
+        rescue_ctx = _gather_aggregate_production_context(query, subsidiary, anaphora, history=history)
+        if rescue_ctx:
+            yield from _llm_stream_from_context(query, rescue_ctx, history=history)
             return
     elif intent == "individual_shift":
         shift_res = lookup_shift(query, subsidiary, history=history)
@@ -1916,6 +2023,12 @@ def rag_stream(query: str, subsidiary: str = "", history: list[dict] | None = No
             yield from _llm_stream_from_context(query, db_ctx, history=history)
             return
 
+    # Text-to-SQL fallback: try structured DB query before full-text RAG
+    sql_ctx = text_to_sql.text_to_sql_context(query, subsidiary, history)
+    if sql_ctx:
+        yield from _llm_stream_from_context(query, sql_ctx, history=history)
+        return
+
     hits = rerank.rerank(query, search(query, subsidiary=subsidiary))
     sources = [
         {"title": h["title"], "page": h["page"], "subsidiary": h["subsidiary"], "score": h["score"]}
@@ -1934,7 +2047,6 @@ def rag_stream(query: str, subsidiary: str = "", history: list[dict] | None = No
                 parts.append(delta)
                 yield {"type": "token", "token": delta}
         except Exception:
-            # mid-stream failure: fall back to what we have
             if not parts:
                 parts = ["The LLM server dropped mid-answer. Top matching passages:\n\n"] + [
                     f"[{h['title']} p.{h['page']}] {h['text'][:300]}" for h in hits[:3]
@@ -1985,12 +2097,18 @@ def answer(query: str, subsidiary: str = "", history: list[dict] | None = None) 
         handler_map = {
             "shift_count": _gather_shift_count_context,
             "top_approver": _gather_top_approver_context,
-            "aggregate_production": _gather_aggregate_production_context,
+            "aggregate_production": lambda qq, ss, aa: _gather_aggregate_production_context(qq, ss, aa, history=history),
             "ranked_shift": _gather_ranked_shift_context,
         }
         db_ctx = handler_map[intent](query, subsidiary, anaphora)
         if db_ctx:
             return _llm_answer_from_context(query, db_ctx, history=history)
+
+    # Follow-up rescue (non-streaming): bare 'so what is the total' probes.
+    if intent == "rag" and history:
+        rescue_ctx = _gather_aggregate_production_context(query, subsidiary, anaphora, history=history)
+        if rescue_ctx:
+            return _llm_answer_from_context(query, rescue_ctx, history=history)
     elif intent == "individual_shift":
         shift_res = lookup_shift(query, subsidiary, history=history)
         if shift_res:
@@ -2029,6 +2147,11 @@ def answer(query: str, subsidiary: str = "", history: list[dict] | None = None) 
             db_ctx = _gather_shift_count_context(query, subsidiary, anaphora)
         if db_ctx:
             return _llm_answer_from_context(query, db_ctx, history=history)
+
+    # Text-to-SQL fallback before full-text RAG
+    sql_ctx = text_to_sql.text_to_sql_context(query, subsidiary, history)
+    if sql_ctx:
+        return _llm_answer_from_context(query, sql_ctx, history=history)
 
     # RAG fallback
     hits = rerank.rerank(query, search(query, subsidiary=subsidiary))

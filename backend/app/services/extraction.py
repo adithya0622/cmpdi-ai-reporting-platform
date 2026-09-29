@@ -152,6 +152,34 @@ def _parse_repaired(raw: str, doc_type: str) -> dict:
         return parse_extraction(fixed, doc_type)
 
 
+_LAKH_T_FIELDS = {"production_lt", "dispatch_lt", "offtake_lt", "rom_lt", "washery_output_lt"}
+_TONNES_FIELDS = {"total_lignite_mt", "output_mt"}
+_M3_FIELDS = {"total_ob_m3"}
+
+
+def _normalize_unit(field_name: str, value: float, doc_type: str) -> float:
+    """Enforce canonical units on extraction output.
+
+    Shift metrics default to tonnes (daily); quarterly production must be lakh tonnes.
+    National benchmarks in MT get stored as-is (reserves_mt).
+    Overburden retains m3. Detects obvious scale mismatches and corrects them."""
+    if field_name in _LAKH_T_FIELDS:
+        if doc_type in ("daily_shift_report", "stoppage_report"):
+            return value
+        # National/macro docs sometimes report in MT; convert to lakh t (* 10)
+        if value > 0 and value < 2000:
+            return value
+        # Implausible lakh-tonnes value (e.g. raw tonnes leaked through): scale down
+        if value >= 100000:
+            return round(value / 100.0, 2)
+    if field_name in _TONNES_FIELDS:
+        # Daily shift output should be in metric tonnes; flag if implausibly large
+        if value > 500000:
+            return round(value / 1000.0, 2)
+    # reserves_mt stays as MT; m3 fields stay as m3 — no conversion needed
+    return value
+
+
 def extract_fields(text: str, doc_type: str) -> dict | None:
     """Pure LLM extraction (no DB). Returns {"fields": {...}, "confidence": {...}} or None if LLM unavailable."""
     schema = get_schema(doc_type)
@@ -218,16 +246,21 @@ def execute_run(run_id: uuid.UUID) -> None:
         for rec in records:
             value = rec["value"]
             is_num = isinstance(value, (int, float)) and not isinstance(value, bool)
+            fname = rec["field_name"]
+
+            if is_num:
+                value = _normalize_unit(fname, float(value), run.doc_type)
+
             db.add(
                 ExtractionField(
                     run_id=run.id,
                     document_id=run.document_id,
-                    field_name=rec["field_name"],
+                    field_name=fname,
                     item=rec["item"][:200],
                     subsidiary=doc.subsidiary or _clean_subsidiary(fields.get("subsidiary")),
                     value_num=float(value) if is_num else None,
                     value_str=None if is_num else str(value),
-                    unit=field_unit(rec["field_name"]),
+                    unit=field_unit(fname),
                     confidence=rec["confidence"],
                     status="auto" if rec["confidence"] >= threshold else "review",
                 )

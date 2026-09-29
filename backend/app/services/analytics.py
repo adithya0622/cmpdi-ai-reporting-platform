@@ -1,3 +1,4 @@
+import io
 import itertools
 import json
 import logging
@@ -24,9 +25,24 @@ WORD_RE = re.compile(r"[a-z\u0900-\u097F]{3,}")
 
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.cluster import MiniBatchKMeans
     _HAS_SKLEARN = True
 except ImportError:
     _HAS_SKLEARN = False
+
+try:
+    from wordcloud import WordCloud as _WC
+    _HAS_WORDCLOUD = True
+except ImportError:
+    _HAS_WORDCLOUD = False
+
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    _HAS_MPL = True
+except ImportError:
+    _HAS_MPL = False
 
 
 def count_terms(texts) -> Counter:
@@ -156,6 +172,86 @@ def topic_trends(subsidiary: str = "", year_from: int | None = None, year_to: in
                 "topics": [{"term": f"{a} {b}", "count": c} for (a, b), c in counts.most_common(per_year)],
             })
     return result
+
+
+def cluster_topics(
+    subsidiary: str = "",
+    year_from: int | None = None,
+    year_to: int | None = None,
+    n_clusters: int = 5,
+    top_terms: int = 8,
+) -> list[dict]:
+    """Unsupervised topic clustering via MiniBatchKMeans over TF-IDF.
+    Returns [{cluster_id, label, terms: [{term, weight}]}]."""
+    if not _HAS_SKLEARN:
+        return []
+    rows = _rows(subsidiary, year_from, year_to)
+    texts = [r["text"] for r in rows]
+    if len(texts) < n_clusters * 2:
+        return []
+
+    vec = TfidfVectorizer(
+        ngram_range=(1, 2),
+        max_features=1000,
+        stop_words=list(STOP),
+        token_pattern=r"[a-zA-Zऀ-ॿ]{3,}",
+        max_df=0.85,
+        min_df=2,
+    )
+    tfidf = vec.fit_transform(texts)
+    km = MiniBatchKMeans(n_clusters=n_clusters, random_state=42, batch_size=256, n_init=3)
+    km.fit(tfidf)
+
+    terms = vec.get_feature_names_out()
+    clusters = []
+    for cid in range(n_clusters):
+        center = km.cluster_centers_[cid]
+        top_idx = center.argsort()[::-1][:top_terms]
+        cluster_terms = [{"term": terms[i], "weight": round(float(center[i]), 4)} for i in top_idx]
+        label = ", ".join(t["term"] for t in cluster_terms[:3])
+        clusters.append({"cluster_id": cid, "label": label, "terms": cluster_terms})
+    return clusters
+
+
+def wordcloud_image(
+    subsidiary: str = "",
+    year_from: int | None = None,
+    year_to: int | None = None,
+    top_n: int = 80,
+    fmt: str = "png",
+) -> bytes | None:
+    """Generate a word cloud image server-side. Returns PNG or SVG bytes, or None if libs missing."""
+    counts = count_terms(r["text"] for r in _rows(subsidiary, year_from, year_to))
+    if not counts:
+        return None
+
+    freq = dict(counts.most_common(top_n))
+
+    if _HAS_WORDCLOUD:
+        wc = _WC(
+            width=800, height=400,
+            background_color="white",
+            colormap="viridis",
+            max_words=top_n,
+        ).generate_from_frequencies(freq)
+        buf = io.BytesIO()
+        wc.to_image().save(buf, format="PNG")
+        return buf.getvalue()
+
+    if _HAS_MPL:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        words = list(freq.keys())[:30]
+        vals = [freq[w] for w in words]
+        ax.barh(words[::-1], vals[::-1], color="#1c357f")
+        ax.set_xlabel("Frequency")
+        ax.set_title("Top Terms")
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format=fmt, dpi=100)
+        plt.close(fig)
+        return buf.getvalue()
+
+    return None
 
 
 # Stoppage reason classification (ordered; first match wins). Tuned on NLC Mine-I reports.

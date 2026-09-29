@@ -51,6 +51,15 @@ class StoppageExtraction(BaseModel):
     machines: list[dict] | None = None
 
 
+class AdministrativeMemoExtraction(BaseModel):
+    subject: str | None = None
+    date: str | None = None
+    issuing_authority: str | None = None
+    reference_number: str | None = None
+    subsidiary: str | None = None
+    summary: str | None = None
+
+
 DAILY_SHIFT_PROMPT = (
     "Extract daily shift production and supply figures from this mine operational report. "
     "Output tonnes are in metric tonnes (mt); overburden in cubic metres (m3). "
@@ -155,6 +164,23 @@ SCHEMAS: dict[str, dict] = {
         "prompt": STOPPAGE_PROMPT,
         "period_type": "daily",
         "items_key": "machines",
+    },
+    "administrative_memo": {
+        "model": AdministrativeMemoExtraction,
+        "items_key": None,
+        "prompt": (
+            "Extract key details from this administrative memo / circular / office order. "
+            "subject: the memo's subject line or topic. "
+            "date: the date on the memo in DD.MM.YYYY format if present, else null. "
+            "issuing_authority: the officer or department who issued the memo. "
+            "reference_number: the memo/circular reference number if present. "
+            "subsidiary: the Coal India subsidiary mentioned (ECL, BCCL, CCL, etc.) or null. "
+            "summary: a 1-2 sentence summary of the memo's content. "
+            'Return ONLY JSON: {"fields": {"subject": str|null, "date": str|null, '
+            '"issuing_authority": str|null, "reference_number": str|null, '
+            '"subsidiary": str|null, "summary": str|null}, '
+            '"confidence": {field_name: 0.0-1.0}}. Use null for fields not present.'
+        ),
     },
 }
 

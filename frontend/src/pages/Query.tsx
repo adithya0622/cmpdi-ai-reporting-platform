@@ -12,68 +12,72 @@ type Msg = {
   rating?: number;
 };
 
-const PRESETS = [
+type Preset = { tag: string; label: string; q: string; sub: string };
+
+const PRESETS: Preset[] = [
   {
-    tag: "Shift Sign-off & Approver",
-    label: "Who approved shift on 08.09.2026? (Shift Sign-off)",
+    tag: "Shift sign-off",
+    label: "Who approved the shift on 08.09.2026?",
     q: "Who approved the shift on 08.09.2026 and what were the production figures?",
     sub: "",
   },
   {
-    tag: "Stoppage Report Sign-off",
+    tag: "Production",
+    label: "BCCL quarterly production in 2024",
+    q: "What was the quarterly coal production of BCCL in 2024?",
+    sub: "BCCL",
+  },
+  {
+    tag: "Reserves",
+    label: "India's total coal reserves",
+    q: "What is India total coal reserve according to the National Inventory 2025?",
+    sub: "",
+  },
+  {
+    tag: "Approvers",
+    label: "Who approved shifts in the past 4 years?",
+    q: "give m the names of all the people who have approved the shifts in the past 4 years",
+    sub: "",
+  },
+  {
+    tag: "Borehole",
+    label: "Borehole BH-21 reserves & depth",
+    q: "What are the estimated coal reserves, seams, and depths for borehole BH-21?",
+    sub: "CMPDI",
+  },
+  {
+    tag: "हिंदी",
+    label: "भारत की कुल कोयला भंडार संख्या?",
+    q: "भारत की कुल कोयला भंडार संख्या क्या है?",
+    sub: "",
+  },
+  {
+    tag: "Stoppage",
     label: "Mine-1 stoppage report approver (07.09.2026)",
     q: "Who approved the stoppage report on 07.09.2026 for Mine-1?",
     sub: "",
   },
   {
-    tag: "Lok Sabha AU5084",
-    label: "Coal production trends in Odisha (AU5084)",
+    tag: "Parliament",
+    label: "Coal production trend in Odisha (AU5084)",
     q: "What was the coal production trend in Odisha according to Lok Sabha question 5084?",
     sub: "",
   },
   {
-    tag: "Borehole Exploration",
-    label: "Borehole BH-21 reserves & depth (CMPDI)",
-    q: "What are the estimated coal reserves, seams, and depths for borehole BH-21?",
-    sub: "CMPDI",
-  },
-  {
-    tag: "Production Figures",
-    label: "BCCL 2024 quarterly production (Deterministic SQL)",
-    q: "What was the quarterly coal production of BCCL in 2024?",
-    sub: "BCCL",
-  },
-  {
-    tag: "Equipment Downtime",
-    label: "BWE-1029 equipment stoppage causes (HEMM)",
+    tag: "Equipment",
+    label: "BWE-1029 stoppage causes & downtime",
     q: "What were the primary stoppage reasons and downtime hours for excavator BWE-1029?",
     sub: "NLC",
   },
   {
-    tag: "National Inventory",
-    label: "National Coal Inventory & Reserve Estimates 2025",
-    q: "What are the total confirmed and indicated coal reserves reported in the National Inventory 2025?",
-    sub: "",
-  },
-  {
-    tag: "Rajya Sabha 2668",
-    label: "Critical mineral exploration (Rajya Sabha 2668)",
-    q: "What are the exploration replies regarding critical mineral and coal blocks in Rajya Sabha question 2668?",
-    sub: "",
-  },
-  {
-    tag: "Hindi Query",
-    label: "भारत की कुल कोयला भंडार संख्या क्या है? (Hindi)",
-    q: "भारत की कुल कोयला भंडार संख्या क्या है?",
-    sub: "",
-  },
-  {
-    tag: "Hindi Query",
-    label: "2024 में BCCL का कोयला उत्पादन कितना था? (Hindi)",
+    tag: "हिंदी",
+    label: "2024 में BCCL का उत्पादन?",
     q: "2024 में BCCL का कोयला उत्पादन कितना था?",
     sub: "BCCL",
   },
 ];
+
+const VISIBLE_PRESETS = 6;
 
 export default function Query() {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -81,6 +85,7 @@ export default function Query() {
   const [subsidiary, setSubsidiary] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [showAllPresets, setShowAllPresets] = useState(false);
 
   async function ask(customQ?: string, customSub?: string) {
     const q = customQ || question;
@@ -144,150 +149,131 @@ export default function Query() {
     } catch {}
   }
 
-  function handlePreset(p: (typeof PRESETS)[0]) {
+  function handlePreset(p: Preset) {
     setQuestion(p.q);
     setSubsidiary(p.sub);
     ask(p.q, p.sub);
   }
 
+  const presets = showAllPresets ? PRESETS : PRESETS.slice(0, VISIBLE_PRESETS);
+
   return (
     <div className="page-inner">
-      <div className="card">
-        <h3>Ask the Corpus (Parliamentary Inquiries, Geological & Operational Figures)</h3>
-        <p className="src" style={{ marginTop: -4, marginBottom: 12 }}>
-          Numerical inquiries automatically route to deterministic SQL tables (sub-10ms, zero hallucinations). Conceptual inquiries route to hybrid dense+sparse RAG with sentence-level citations.
+      {/* ── Ask panel ─────────────────────────────────────────── */}
+      <div className="card query-ask">
+        <h3>Ask the AI</h3>
+        <p className="src">
+          Every answer comes from your indexed documents — figures are pulled from verified
+          data tables, and citations are always shown.
         </p>
 
-        <label style={{ fontWeight: 600 }}>1-Click Inquiry Presets (SIH Pitch Presets):</label>
+        <div className="ask-row">
+          <input
+            id="query-q"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && ask()}
+            placeholder="Ask about production, reserves, shifts, approvals…"
+            aria-label="Question"
+          />
+          <input
+            id="query-sub"
+            className="ask-subsidiary"
+            value={subsidiary}
+            onChange={(e) => setSubsidiary(e.target.value)}
+            placeholder="Subsidiary (optional)"
+            aria-label="Subsidiary filter"
+          />
+          <button className="primary" disabled={busy || !question.trim()} onClick={() => ask()}>
+            {busy ? "Thinking…" : "Ask"}
+          </button>
+        </div>
+
         <div className="preset-group">
-          {PRESETS.map((p, idx) => (
+          {presets.map((p, idx) => (
             <button
               key={idx}
               type="button"
               className="preset-chip"
               onClick={() => handlePreset(p)}
               disabled={busy}
+              title={p.tag}
             >
-              <span className="tag">{p.tag}</span>
-              <span>{p.label}</span>
+              {p.label}
             </button>
           ))}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 3fr", gap: 12, marginTop: 8 }}>
-          <div>
-            <label htmlFor="query-sub">Subsidiary Filter</label>
-            <input
-              id="query-sub"
-              value={subsidiary}
-              onChange={(e) => setSubsidiary(e.target.value)}
-              placeholder="e.g. BCCL, ECL, CMPDI"
-            />
-          </div>
-          <div>
-            <label htmlFor="query-q">Question / Inquiry</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                id="query-q"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && ask()}
-                placeholder="Ask any question about production, reserves, or parliamentary queries..."
-              />
-              <button className="primary" style={{ marginTop: 2 }} disabled={busy} onClick={() => ask()}>
-                {busy ? "Thinking..." : "Submit Inquiry"}
-              </button>
-            </div>
-          </div>
+          <button
+            type="button"
+            className="preset-chip preset-more"
+            onClick={() => setShowAllPresets(!showAllPresets)}
+          >
+            {showAllPresets ? "− Fewer examples" : `+ ${PRESETS.length - VISIBLE_PRESETS} more examples`}
+          </button>
         </div>
 
         {err && <p className="err" role="alert">{err}</p>}
+      </div>
 
-        <div className="chat" style={{ marginTop: 24 }} role="log" aria-live="polite">
-          {messages.map((m, i) => (
-            <div key={i} className={`bubble ${m.role}`}>
-              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{m.content}</div>
+      {/* ── Conversation ──────────────────────────────────────── */}
+      <div className="chat" role="log" aria-live="polite">
+        {messages.map((m, i) => (
+          <div key={i} className={`bubble ${m.role}`}>
+            <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{m.content}</div>
 
-              {m.role === "bot" && (
-                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  {m.mode === "figures" ? (
-                    <span className="badge badge-sql"><span aria-hidden="true">⚡</span> Deterministic SQL Query (Zero Hallucination)</span>
-                  ) : (
-                    <span className="badge badge-rag"><span aria-hidden="true">🧠</span> Sovereign Hybrid RAG (Local GPU · Qwen3-8B)</span>
-                  )}
+            {m.role === "bot" && (m.mode || m.latency_ms != null || m.query_log_id) && (
+              <div className="msg-meta">
+                <span className="meta-mode">{m.mode === "figures" ? "Verified data" : "AI answer"}</span>
+                {m.latency_ms != null && <span>{(m.latency_ms / 1000).toFixed(1)} s</span>}
+                {m.grounded_pct != null && <span>{(m.grounded_pct * 100).toFixed(0)}% grounded</span>}
+                {m.query_log_id && (
+                  <span className="meta-feedback">
+                    <button
+                      className={`thumb${m.rating === 1 ? " thumb-up" : ""}`}
+                      aria-label="Rate as helpful"
+                      onClick={() => submitFeedback(i, 1)}
+                      disabled={m.rating !== undefined}
+                    >
+                      <span aria-hidden="true">👍</span>
+                    </button>
+                    <button
+                      className={`thumb${m.rating === -1 ? " thumb-down" : ""}`}
+                      aria-label="Rate as not helpful"
+                      onClick={() => submitFeedback(i, -1)}
+                      disabled={m.rating !== undefined}
+                    >
+                      <span aria-hidden="true">👎</span>
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
 
-                  {m.latency_ms != null && (
-                    <span className="badge badge-green"><span aria-hidden="true">⏱️</span> {m.latency_ms} ms</span>
-                  )}
+            {m.sources && m.sources.length > 0 && (
+              <div className="meta cites">
+                {m.sources.slice(0, 5).map((s: any, idx: number) => (
+                  <span key={idx} className="cite-chip" title={s.title}>
+                    📄 {s.title} (p.{s.page})
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
 
-                  {m.grounded_pct != null && (
-                    <span className="badge badge-amber">
-                      <span aria-hidden="true">🎯</span> {(m.grounded_pct * 100).toFixed(0)}% Grounded
-                    </span>
-                  )}
+        {busy && (
+          <div className="bubble bot" role="status" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Searching documents and data tables…</span>
+          </div>
+        )}
 
-                  {m.query_log_id && (
-                    <span style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-                      <button
-                        className={`small${m.rating === 1 ? " badge-green" : ""}`}
-                        style={{ padding: "2px 8px", fontSize: 14, cursor: "pointer" }}
-                        aria-label="Rate as helpful"
-                        onClick={() => submitFeedback(i, 1)}
-                        disabled={m.rating !== undefined}
-                      >
-                        <span aria-hidden="true">👍</span>
-                      </button>
-                      <button
-                        className={`small${m.rating === -1 ? " badge-red" : ""}`}
-                        style={{ padding: "2px 8px", fontSize: 14, cursor: "pointer" }}
-                        aria-label="Rate as not helpful"
-                        onClick={() => submitFeedback(i, -1)}
-                        disabled={m.rating !== undefined}
-                      >
-                        <span aria-hidden="true">👎</span>
-                      </button>
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {m.sources && m.sources.length > 0 && (
-                <div className="meta" style={{ marginTop: 8, borderTop: "1px dashed var(--border)", paddingTop: 6 }}>
-                  <b>Verified Citations:</b>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-                    {m.sources.slice(0, 6).map((s: any, idx: number) => (
-                      <span
-                        key={idx}
-                        style={{
-                          background: "var(--card-bg)",
-                          border: "1px solid var(--border)",
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          fontSize: 11,
-                        }}
-                      >
-                        <span aria-hidden="true">📄</span> {s.title} (p.{s.page})
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-
-          {busy && (
-            <div className="bubble bot" role="status" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span>Searching verified vector chunks & SQL tables...</span>
-            </div>
-          )}
-
-          {!messages.length && !busy && (
-            <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-muted)" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }} aria-hidden="true">🔍</div>
-              <p style={{ margin: 0 }}>Click any of the inquiry presets above or type a custom question.</p>
-            </div>
-          )}
-        </div>
+        {!messages.length && !busy && (
+          <div className="chat-empty">
+            <div style={{ fontSize: 30, marginBottom: 8 }} aria-hidden="true">💬</div>
+            <p style={{ margin: 0 }}>
+              Try an example above, or type your own question — in English or Hindi.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

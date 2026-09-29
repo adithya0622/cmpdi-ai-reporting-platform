@@ -36,11 +36,13 @@ def list_reports(limit: int = 50, _user=Depends(require_min_role("viewer"))):
 
 
 @router.get("/{report_id}/download")
-def download(report_id: str, _user=Depends(require_min_role("viewer"))):
+def download(report_id: str, format: str = "docx", _user=Depends(require_min_role("viewer"))):
     try:
         rid = uuidlib.UUID(report_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid report id")
+    if format not in ("docx", "pdf"):
+        raise HTTPException(status_code=400, detail="format must be 'docx' or 'pdf'")
     db = SessionLocal()
     try:
         row = db.execute(sqltext("SELECT file_path FROM reports WHERE id = :id"), {"id": rid}).first()
@@ -48,7 +50,16 @@ def download(report_id: str, _user=Depends(require_min_role("viewer"))):
         db.close()
     if not row:
         raise HTTPException(status_code=404, detail="report not found")
-    return FileResponse(row[0], filename="report.docx")
+
+    docx_path = row[0]
+    if format == "pdf":
+        from ..services.report_gen import convert_docx_to_pdf
+        import os
+        pdf_path = docx_path.replace(".docx", ".pdf")
+        if not os.path.exists(pdf_path):
+            pdf_path = convert_docx_to_pdf(docx_path)
+        return FileResponse(pdf_path, filename="report.pdf", media_type="application/pdf")
+    return FileResponse(docx_path, filename="report.docx")
 
 
 @router.get("/{report_id}/preview")

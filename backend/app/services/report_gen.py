@@ -1,6 +1,9 @@
 import datetime
+import logging
 import os
+import platform
 import re
+import subprocess
 import uuid
 
 from docxtpl import DocxTemplate
@@ -9,6 +12,42 @@ from ..config import settings
 from ..db import SessionLocal
 from ..models import Document, ExtractionField, Report
 from . import llm
+
+log = logging.getLogger(__name__)
+
+
+def convert_docx_to_pdf(docx_path: str) -> str:
+    """Convert a .docx file to PDF. Uses docx2pdf on Windows, LibreOffice on Linux.
+    Returns the path to the generated PDF."""
+    pdf_path = re.sub(r"\.docx$", ".pdf", docx_path, flags=re.IGNORECASE)
+    if pdf_path == docx_path:
+        pdf_path = docx_path + ".pdf"
+
+    if platform.system() == "Windows":
+        try:
+            import docx2pdf
+            docx2pdf.convert(docx_path, pdf_path)
+            return pdf_path
+        except ImportError:
+            pass
+
+    # LibreOffice fallback (Linux / Docker)
+    out_dir = os.path.dirname(docx_path) or "."
+    result = subprocess.run(
+        ["libreoffice", "--headless", "--convert-to", "pdf", "--outdir", out_dir, docx_path],
+        capture_output=True,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"LibreOffice PDF conversion failed: {result.stderr.decode()[:500]}")
+    if not os.path.exists(pdf_path):
+        base = os.path.splitext(os.path.basename(docx_path))[0]
+        candidate = os.path.join(out_dir, base + ".pdf")
+        if os.path.exists(candidate):
+            pdf_path = candidate
+        else:
+            raise RuntimeError("PDF file not found after LibreOffice conversion")
+    return pdf_path
 
 
 def _friendly_name(filename: str) -> str:
@@ -834,9 +873,16 @@ def generate(title: str, subsidiary: str = "", year_from: int | None = None, yea
                 qnum = int(qm.group(1)) if qm else 0
 
                 prod_val = by_name.get("production_lt").value_num if by_name.get("production_lt") else None
-                # Normalize if extracted as tonnes / thousand tonnes
+                # Normalize: shift metrics default to tonnes; quarterly lakh t values
+                # above 2000 are likely raw tonnes leaked through extraction
                 if prod_val is not None and prod_val > 2000:
                     prod_val = round(prod_val / 100.0, 1)
+
+                # Normalize dispatch/offtake the same way
+                for _lt_key in ("dispatch_lt", "offtake_lt", "rom_lt", "washery_output_lt"):
+                    _lt_f = by_name.get(_lt_key)
+                    if _lt_f and _lt_f.value_num is not None and _lt_f.value_num > 2000:
+                        _lt_f.value_num = round(_lt_f.value_num / 100.0, 1)
 
                 extras = []
                 for f in fl[:50]:

@@ -18,3 +18,7 @@ pgdata/
 backend.pid
 *.log
 .freebuff/
+*.egg-info/
+dist/
+build/
+.docker/

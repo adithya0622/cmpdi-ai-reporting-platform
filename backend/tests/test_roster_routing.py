@@ -196,3 +196,95 @@ class TestRegexFallback:
     def test_non_roster_still_routes_correctly(self):
         assert _regex_fallback_intent("describe the geology of the Jharia coalfield", {}) == "rag"
         assert _regex_fallback_intent("who approved the shift on 08.09.2026", {}) == "individual_shift"
+
+
+# ── 7. Anaphora must NOT inherit subsidiaries from assistant answers ─────────
+
+class TestAnaphoraScope:
+    def test_no_subsidiary_from_assistant_answer(self):
+        # The reported failure: roster answer listed ECL/BCCL/NCL, the follow-up
+        # "so how shifts took place in those years" inherited NCL and returned 1.
+        history = [
+            {"role": "user", "content": "how many years of data do u have"},
+            {
+                "role": "assistant",
+                "content": "84 continuous days of shift logs. Baseline production logs (ECL, BCCL, NCL). 5 distinct years 2022 to 2026.",
+            },
+        ]
+        ctx = rag._resolve_anaphora("so how shifts took place in those years", history)
+        assert "subsidiary" not in ctx, "assistant-listed subsidiaries must not poison scope"
+        assert ctx.get("topic") == "shifts"
+
+    def test_subsidiary_from_user_message_still_inherits(self):
+        history = [
+            {"role": "user", "content": "what about NCL shift operations"},
+            {"role": "assistant", "content": "NCL has recorded shifts."},
+        ]
+        ctx = rag._resolve_anaphora("how many were there in those years", history)
+        assert ctx.get("subsidiary") == "NCL"
+
+
+# ── 8. Shift-count context: year-wise breakdown, unscoped totals ─────────────
+
+class TestShiftCountContext:
+    def test_matches_took_place_phrasing(self):
+        assert rag._gather_shift_count_context("so how shifts took place in those years", "", {}) is not None
+
+    def test_non_count_queries_return_none(self):
+        assert rag._gather_shift_count_context("who approved the shift on 08.09.2026", "", {}) is None
+        assert rag._gather_shift_count_context("how many shifts in a day", "", {}) is None
+
+    @DB
+    def test_yearwise_breakdown_present_and_unscoped(self):
+        ctx = rag._gather_shift_count_context("how many shifts took place across all years", "", {})
+        assert ctx is not None
+        assert "Year-wise breakdown (ALL years covered):" in ctx
+        # unscoped: must cover the multi-year corpus, not a single subsidiary
+        assert "2026: " in ctx
+        assert "2022: " in ctx or "2023: " in ctx or "2024: " in ctx or "2025: " in ctx
+        # with no subsidiary scope the total equals the whole shift corpus (>90)
+        total_line = next(l for l in ctx.splitlines() if l.startswith("Total shift operations"))
+        total = int(total_line.split(":")[1].strip().split(" ")[0])
+        assert total >= 90, f"unscoped total should cover all subsidiaries, got {total}"
+
+
+# ── 9. Conversation-aware metric resolution for aggregate totals ─────────────
+
+class TestTopicMetricResolution:
+    def test_bare_followup_inherits_metric_from_history(self):
+        # the reported failure: 'so what is the total' after BCCL quarterly question
+        history = [
+            {"role": "user", "content": "What was the quarterly coal production of BCCL in 2024?"},
+            {"role": "assistant", "content": "Q1 2024: 44.0 lakh tonnes. Q2: 44.8 lakh tonnes."},
+        ]
+        t = rag._resolve_topic_metric("so what is the total", history)
+        assert t["field"] == "production_lt"
+        assert t["subsidiary"] == "BCCL"
+        assert t["years"] == (2024, 2024)
+
+    def test_query_takes_priority_over_history(self):
+        history = [
+            {"role": "user", "content": "coal production of BCCL in 2024"},
+        ]
+        t = rag._resolve_topic_metric("what about total overburden for ECL in 2022", history)
+        assert t["field"] == "total_ob_m3"
+        assert t["subsidiary"] == "ECL"
+        assert t["years"] == (2022, 2022)
+
+    def test_no_history_no_metric(self):
+        t = rag._resolve_topic_metric("what is the total", [])
+        assert t["field"] is None and t["subsidiary"] == "" and t["years"] is None
+
+    @DB
+    def test_bare_total_followup_gathers_summed_context(self):
+        history = [
+            {"role": "user", "content": "What was the quarterly coal production of BCCL in 2024?"},
+        ]
+        ctx = rag._gather_aggregate_production_context(
+            "so what is the total", "", {}, history=history
+        )
+        assert ctx is not None
+        assert "production_lt" in ctx
+        assert "TOTAL" in ctx
+        assert "BCCL" in ctx and "2024" in ctx
+        assert "Quarter 1 2024" in ctx and "Quarter 2 2024" in ctx
