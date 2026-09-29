@@ -130,12 +130,30 @@ def execute_readonly_query(sql: str) -> list[dict] | None:
         db.close()
 
 
+def _inject_subsidiary_filter(sql: str, subsidiary: str) -> str:
+    """Inject a subsidiary scope filter into the SQL so non-admin users
+    cannot read another subsidiary's data via LLM-generated queries."""
+    if not subsidiary:
+        return sql
+    safe_sub = subsidiary.replace("'", "''")
+    marker = "WHERE"
+    idx = sql.upper().find(marker)
+    if idx == -1:
+        return sql
+    insert_at = idx + len(marker)
+    clause = f" (d.subsidiary ILIKE '%{safe_sub}%' OR d.subsidiary = '' OR d.subsidiary IS NULL) AND"
+    return sql[:insert_at] + clause + sql[insert_at:]
+
+
 def text_to_sql_context(query: str, subsidiary: str = "", history: list[dict] | None = None) -> str | None:
     """Full pipeline: generate SQL, execute, format as context string for LLM narration.
     Returns context string or None on failure (caller should fall back to RAG)."""
     sql = generate_sql(query, history)
     if not sql or not _is_safe(sql):
         return None
+
+    if subsidiary:
+        sql = _inject_subsidiary_filter(sql, subsidiary)
 
     rows = execute_readonly_query(sql)
     if not rows:

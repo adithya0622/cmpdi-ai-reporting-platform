@@ -94,7 +94,7 @@ def _notify_completion(kind: str, status: str, error: str, payload: dict) -> Non
             notifications.notify(
                 "extraction_complete",
                 f"Extraction complete: {payload.get('run_id', '')}",
-                f"Extraction run completed successfully.",
+                "Extraction run completed successfully.",
                 {"kind": kind, "run_id": payload.get("run_id")},
             )
     except Exception:

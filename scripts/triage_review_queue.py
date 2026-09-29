@@ -21,9 +21,8 @@ from collections import Counter
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
 
-from sqlalchemy import text as sqltext
-
 from app.db import SessionLocal
+from sqlalchemy import text as sqltext
 
 ANCHORS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "evals", "anchors.json")
 REL_TOL = 0.02
@@ -78,7 +77,7 @@ def main():
             identity = abs(out - rate * ewh) <= REL_TOL * max(abs(rate * ewh), 1.0)
             if ewh > twh or twh > 24:
                 verdict = "reject"
-            elif identity and 0 <= ewh:
+            elif identity and ewh >= 0:
                 verdict = "confirm"
             else:
                 stats["machine_group_uncertain"] += 1

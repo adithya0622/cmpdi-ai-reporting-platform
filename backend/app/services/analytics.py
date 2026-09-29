@@ -24,8 +24,8 @@ STOP = {
 WORD_RE = re.compile(r"[a-z\u0900-\u097F]{3,}")
 
 try:
-    from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.cluster import MiniBatchKMeans
+    from sklearn.feature_extraction.text import TfidfVectorizer
     _HAS_SKLEARN = True
 except ImportError:
     _HAS_SKLEARN = False

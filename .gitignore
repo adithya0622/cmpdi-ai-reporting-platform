@@ -22,3 +22,6 @@ backend.pid
 dist/
 build/
 .docker/
+scratch/
+backend/app/static/assets/
+backend/scripts/demo_seed_data.json

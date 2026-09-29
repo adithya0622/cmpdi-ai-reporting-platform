@@ -154,8 +154,8 @@ def approve_document(doc_id: str, body: ApproveDocIn, user=Depends(require_min_r
 
 @router.post("/approve-all")
 def approve_all_documents(user=Depends(require_min_role("analyst"))):
-    from ..services.shift_service import approve_all_pending_documents
     from ..services.audit import log as audit_log
+    from ..services.shift_service import approve_all_pending_documents
 
     db = SessionLocal()
     try:

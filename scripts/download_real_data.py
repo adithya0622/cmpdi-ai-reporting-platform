@@ -12,7 +12,6 @@ import json
 import os
 import re
 import ssl
-import sys
 import urllib.request
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "real_data")

@@ -15,7 +15,6 @@ from ..extraction_schemas import (
 from ..models import Chunk, Document, ExtractionField, ExtractionRun
 from . import llm, validation
 
-
 SUBSIDIARY_CANONICAL: dict[str, str] = {
     "eastern coalfields": "ECL", "eastern coalfields limited": "ECL", "ecl": "ECL",
     "bharat coking coal": "BCCL", "bharat coking coal limited": "BCCL", "bccl": "BCCL",

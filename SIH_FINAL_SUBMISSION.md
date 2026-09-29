@@ -6,7 +6,7 @@
 ### Executive Summary
 This platform is a sovereign, enterprise-grade AI system engineered specifically for **Central Mine Planning & Design Institute (CMPDI)** and **Coal India Limited (CIL)**. It automates the end-to-end lifecycle of geological and mining documentation:
 1. **Multi-Format Ingestion:** Digestion of borehole lithology logs, shift stoppage reports, daily production tallies, and parliamentary Q&As (PDF, DOCX, scanned reports).
-2. **Domain-Specific Fine-Tuned AI:** A custom-trained Qwen 2.5 LoRA model with hardware acceleration on NVIDIA Blackwell Tensor Cores, delivering **98.4% extraction precision**.
+2. **Domain-Specific Fine-Tuned AI:** A custom-trained Qwen 2.5 LoRA model with hardware acceleration on NVIDIA Blackwell Tensor Cores, delivering **98.4% extraction precision on clean digital text** (~150 gold entries across 5 doc types).
 3. **Automated Report Generation:** One-click compilation into compliant, standard Ministry Word (`.docx`) and PDF formats with automated charts and tables.
 4. **Air-Gapped Sovereign Deployment:** 100% offline, local compute with zero external cloud dependencies or per-token fees.
 

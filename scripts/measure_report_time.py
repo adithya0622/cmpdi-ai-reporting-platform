@@ -21,7 +21,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
 
-from app.services import report_gen  # noqa: E402
+from app.services import report_gen
 
 BASELINE_ASSUMPTION = (
     "Manual compilation of the same monthly ops report (locate source docs, read tables, "

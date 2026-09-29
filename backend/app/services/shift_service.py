@@ -4,15 +4,12 @@ ensuring realistic rotations across days and mines (no duplicate approvers),
 and guaranteed operational shift records for ANY date requested by the user.
 """
 import datetime
-import math
 import random
 import re
-import uuid
 
 from sqlalchemy import text as sqltext
 
 from ..config import settings
-from ..db import SessionLocal
 from ..models import Chunk, Document, ExtractionField, ExtractionRun
 from . import embeddings
 

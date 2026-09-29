@@ -75,7 +75,7 @@ AI recommendation engine, user feedback loop, notifications (SMTP/webhook), prio
 |---|---|---|
 | Answers say "LLM unavailable" | LLM server down / not started | `docker compose --profile llm up -d`; check `GET /query/health` |
 | Documents stuck in `indexing` | Worker not running | `python scripts/worker.py` |
-| Status `indexed_no_embeddings` | Embedding model missing | Pre-download `intfloat/multilingual-e5-base` into `/data/models` (full-text search still works) |
+| Status `indexed_no_embeddings` | Embedding model missing | Pre-download `intfloat/multilingual-e5-small` into `/data/models` (full-text search still works) |
 | Garbage OCR on old scans | Scan quality below Tesseract floor | Low-confidence pages need manual review; consider rescan at 300+ dpi |
 | 401 on every call | Not logged in / token expired | Login again (token lasts 12h) |
 | 403 on upload/generate | Role too low | Admin page → upgrade to analyst |
@@ -114,7 +114,7 @@ Required: set `AUTH_SECRET` and `DB_PASSWORD` in `.env`.
 
 Pre-download on a connected machine, copy into `./data` (mounted at `/data`):
 
-- [ ] Models: `Qwen/Qwen3-8B-GGUF` (Q4_K_M) in `data/llm/`, `intfloat/multilingual-e5-base`, `BAAI/bge-reranker-v2-m3`
+- [ ] Models: `Qwen/Qwen3-8B-GGUF` (Q4_K_M) in `data/llm/`, `intfloat/multilingual-e5-small`, `BAAI/bge-reranker-v2-m3`
 - [ ] pip wheels: `pip download -r backend/requirements.txt -d wheels/`
 - [ ] Docker images: `pgvector/pgvector:pg16`, `vllm/vllm-openai:v0.6.6`, `node:20-slim`, `python:3.11-slim` (`docker save` / `docker load`)
 - [ ] npm packages: vendored `frontend/node_modules` or offline registry mirror
@@ -125,7 +125,7 @@ Pre-download on a connected machine, copy into `./data` (mounted at `/data`):
 | Metric | Where |
 |---|---|
 | Report prep time ↓70-80% | `reports.created_at` vs Phase-1 baseline (measure before go-live) |
-| Extraction accuracy 95%+ | ✅ **98.4% measured** (2026-09-28: ~150 gold entries, base Qwen3-8B via llama.cpp). Re-run after any model/prompt/schema change |
+| Extraction accuracy 95%+ | ✅ **98.4% measured on clean digital text** (2026-09-28: ~150 gold entries, base Qwen3-8B via llama.cpp). Scanned/OCR documents may score lower. Re-run after any model/prompt/schema change |
 | Automation 80% | Ingestion + extraction + report jobs vs manual touchpoints |
 | MoC response time | `query_log.latency_ms` + answer turnaround |
 

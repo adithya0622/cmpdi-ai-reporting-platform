@@ -95,6 +95,7 @@ def review_queue(_user=Depends(require_min_role("viewer"))):
 @router.post("/fields/{field_id}/review")
 def review_field(field_id: int, body: ReviewIn, user=Depends(require_min_role("analyst"))):
     import datetime
+
     from ..models import Document
     from ..services.audit import log as audit_log
 
@@ -117,7 +118,7 @@ def review_field(field_id: int, body: ReviewIn, user=Depends(require_min_role("a
             f.status = "confirmed"
             f.confidence = 1.0
             f.approved_by = approver
-            
+
             # Synchronize to document
             doc = db.get(Document, f.document_id)
             if doc:

@@ -800,7 +800,6 @@ def generate(title: str, subsidiary: str = "", year_from: int | None = None, yea
         boreholes = []
         ops = []
 
-        quarter_map = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}
         sub_priority = {"BCCL": 1, "ECL": 2, "CCL": 3, "NCL": 4, "WCL": 5, "SECL": 6, "MCL": 7, "NEC": 8, "CIL": 9}
 
         for d in docs:
@@ -965,8 +964,6 @@ def generate(title: str, subsidiary: str = "", year_from: int | None = None, yea
         bccl_growth = ((bccl_last - bccl_first) / bccl_first * 100) if bccl_first else 0.0
 
         ecl_rows = by_sub.get("ECL", [])
-        ecl_first = ecl_rows[0]["_prod_num"] if ecl_rows else 0.0
-        ecl_last = ecl_rows[-1]["_prod_num"] if ecl_rows else 0.0
         ecl_peak = max((r["_prod_num"] for r in ecl_rows), default=0.0)
         ecl_avg = (sum(r["_prod_num"] for r in ecl_rows) / len(ecl_rows)) if ecl_rows else 0.0
 

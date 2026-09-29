@@ -13,11 +13,9 @@ carries a SYNTHETIC marker.
 Usage: python scripts/make_sample_files.py [--out demo_data/samples]
 """
 import argparse
-import io
 import json
 import os
 import random
-import sys
 
 ANCHORS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "evals", "anchors.json")
 

@@ -4,7 +4,6 @@
 Run directly:  python backend/scripts/verify_demo_pipeline.py
 No pytest required.  Exit code 0 = all pass, 1 = failures.
 """
-import importlib
 import io
 import os
 import platform
@@ -282,9 +281,9 @@ section("OBJECTIVE 4 — Clustering, Word Cloud, administrative_memo")
 
 # 4a. cluster_topics via sklearn directly (bypass app import chain)
 try:
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.cluster import MiniBatchKMeans
     import numpy as np
+    from sklearn.cluster import MiniBatchKMeans
+    from sklearn.feature_extraction.text import TfidfVectorizer
 
     STOP_WORDS = {"the", "and", "of", "to", "in", "a", "for", "on", "is", "with",
                   "as", "by", "at", "from", "an", "be", "are", "were", "was"}
@@ -329,7 +328,7 @@ try:
     ok("cluster_topics (MiniBatchKMeans)", f"{len(clusters)} clusters: {labels}")
 except ImportError:
     skip("cluster_topics", "scikit-learn not installed")
-except Exception as e:
+except Exception:
     fail("cluster_topics", traceback.format_exc())
 
 # 4b. wordcloud_image
@@ -384,7 +383,7 @@ try:
         ok("wordcloud_image", f"via {wc_method}, {wc_size:,} bytes PNG")
     else:
         skip("wordcloud_image", "neither wordcloud nor matplotlib available")
-except Exception as e:
+except Exception:
     fail("wordcloud_image", traceback.format_exc())
 
 # 4c. administrative_memo schema
@@ -486,7 +485,7 @@ try:
             all_ok = False
     if all_ok:
         ok("_normalize_unit", f"all {len(tests)} conversion scenarios verified")
-except Exception as e:
+except Exception:
     fail("_normalize_unit", traceback.format_exc())
 
 # 5b. Integration in extraction.py

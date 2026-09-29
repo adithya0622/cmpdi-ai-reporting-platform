@@ -10,9 +10,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
 
-from sqlalchemy import text
-
 from app.db import SessionLocal
+from sqlalchemy import text
 
 # old generator wrote titles like "04-08-2026-MINE_I-SHIFT-REPORT" and
 # "geological_report_Garjanbahal_BH01" (no -SYNTHETIC marker)

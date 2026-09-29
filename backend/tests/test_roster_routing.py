@@ -13,7 +13,6 @@ Strategy (mirrors existing test suites - DB-free where possible):
 - _regex_fallback_intent coverage (LLM-down path)
 """
 import pytest
-
 from app.services import rag
 from app.services.rag import (
     _is_roster_query,
@@ -22,7 +21,6 @@ from app.services.rag import (
     _roster_relative_years,
     lookup_roster_or_approvers,
 )
-
 
 # ── 1. Predicate: the exact reported failure + variants ──────────────────────
 

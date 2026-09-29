@@ -6,8 +6,19 @@ ignore = [
     "S110",   # try-except-pass in audit/log paths - must never break requests
     "B904",   # HTTPException re-raise inside except without from - FastAPI convention here
     "E501",   # long lines allowed
+    "E711",   # == None in SQLAlchemy filter expressions (is None won't generate SQL)
+    "RUF001", # ambiguous unicode characters - Hindi strings in codebase are intentional
+    "RUF002", # ambiguous unicode characters in docstrings
+    "S106",   # false positives on TfidfVectorizer token_pattern param
+    "SIM102", # nested ifs are clearer in some extraction/normalization guard logic
 ]
 
 [lint.per-file-ignores]
-"scripts/*.py" = ["E402", "S603", "S607", "S311"]
-"backend/tests/*.py" = ["E402", "S101", "S105"]
+"scripts/*.py" = ["E402", "S603", "S605", "S607", "S608", "S310", "S311", "DTZ011", "E741", "F841", "B007", "B011"]
+"backend/scripts/*.py" = ["E402", "S603", "S607", "S311", "S101", "F841", "F401"]
+"backend/tests/*.py" = ["E402", "S101", "S105", "B011", "E741"]
+"backend/app/services/report_gen.py" = ["S603", "S607"]
+"backend/app/services/rag.py" = ["S608", "DTZ011"]
+"backend/app/services/shift_service.py" = ["S311"]
+"backend/app/services/notifications.py" = ["S310"]
+"scratch/*.py" = ["E402", "S101", "S311", "F841"]

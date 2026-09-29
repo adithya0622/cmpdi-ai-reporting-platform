@@ -1,6 +1,7 @@
 import json
 import os
 
+
 def create_notebook():
     notebook = {
         'cells': [

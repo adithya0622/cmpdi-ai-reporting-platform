@@ -88,7 +88,7 @@ Doc types: `production_report`, `geological`, `parliamentary_q`, `daily_shift_re
 
 - Backend: FastAPI, SQLAlchemy 2, PostgreSQL + pgvector (structured data, full-text, vectors — one DB, three jobs)
 - LLM: any OpenAI-compatible server - llama.cpp `llama-server` with Qwen3-8B (Q4_K_M) locally, or vLLM; works without LLM (graceful degradation)
-- Embeddings: `intfloat/multilingual-e5-base` (384-dim, Hindi + English)
+- Embeddings: `intfloat/multilingual-e5-small` (384-dim, Hindi + English)
 - Reranker: `BAAI/bge-reranker-v2-m3` cross-encoder (disable with `RERANKER_ENABLED=false`)
 - OCR: Tesseract (eng+hin)
 - Frontend: React + TypeScript (Vite) in `frontend/`, built into Docker image multi-stage; static `index.html` fallback
@@ -208,7 +208,7 @@ Analytics over extracted stoppages: `GET /analytics/stoppage_pareto?date_from=..
 | `DATABASE_URL` | localhost pg | use `db` host in compose; on Windows with App Control policy blocking psycopg2, use `postgresql+pg8000://` |
 | `AUTH_SECRET` | random | set in production for stable token signing |
 | `LLM_BASE_URL` / `LLM_MODEL` | local llama-server (Qwen3-8B) | any OpenAI-compatible endpoint (llama.cpp/vLLM/Ollama) |
-| `EMBEDDING_MODEL` | multilingual-e5-base | must be 384-dim (matches `Vector(384)`) |
+| `EMBEDDING_MODEL` | multilingual-e5-small | must be 384-dim (matches `Vector(384)`) |
 | `RERANKER_ENABLED` | true | set false to skip cross-encoder reranking |
 | `OCR_LANG` | eng+hin | Tesseract languages |
 | `DEMO_MODE` | false | set true for demo (relaxed auth, sample data) |

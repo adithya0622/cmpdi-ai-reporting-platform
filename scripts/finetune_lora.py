@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 def build_training_set(out_path: str, limit: int = 5000) -> int:
     """Compile clean training pairs from confirmed + high-confidence extractions: doc text -> fields JSON."""
     import re
+
     from app.db import SessionLocal
     from app.models import Chunk, Document, ExtractionField
     from sqlalchemy import text as sqltext
@@ -39,7 +40,7 @@ def build_training_set(out_path: str, limit: int = 5000) -> int:
                 # 1. Sanitize: Remove synthetic generator disclaimers & anchor notes
                 clean_text = re.sub(r"NOTE:\s*SYNTHETIC\s*DEMO\s*DOCUMENT.*?(?:\n|$)", "", raw_text, flags=re.I)
                 clean_text = re.sub(r"(?:[/\w.-]*anchors\.json\)?\.?\s*)+", "", clean_text)
-                
+
                 # 2. Deduplicate consecutive identical lines from chunk overlaps
                 lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
                 deduped = []

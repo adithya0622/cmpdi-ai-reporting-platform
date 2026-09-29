@@ -53,8 +53,9 @@ def download(report_id: str, format: str = "docx", _user=Depends(require_min_rol
 
     docx_path = row[0]
     if format == "pdf":
-        from ..services.report_gen import convert_docx_to_pdf
         import os
+
+        from ..services.report_gen import convert_docx_to_pdf
         pdf_path = docx_path.replace(".docx", ".pdf")
         if not os.path.exists(pdf_path):
             pdf_path = convert_docx_to_pdf(docx_path)
@@ -65,6 +66,7 @@ def download(report_id: str, format: str = "docx", _user=Depends(require_min_rol
 @router.get("/{report_id}/preview")
 def preview(report_id: str, _user=Depends(require_min_role("viewer"))):
     import os
+
     import docx
     try:
         rid = uuidlib.UUID(report_id)
@@ -114,5 +116,5 @@ def preview(report_id: str, _user=Depends(require_min_role("viewer"))):
             "tables": tables,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"failed to parse report preview: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"failed to parse report preview: {e!s}")
 

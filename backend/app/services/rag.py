@@ -423,8 +423,9 @@ def lookup_corpus_coverage(query: str) -> dict | None:
 
     db = SessionLocal()
     try:
-        from ..models import Document, Chunk, ExtractionField
         from sqlalchemy import func
+
+        from ..models import Chunk, Document, ExtractionField
 
         date_rows = db.query(Document.doc_date, func.count(Document.id))\
                       .filter(Document.doc_date != None)\
@@ -770,7 +771,7 @@ def lookup_roster_or_approvers(query: str, history: list[dict] | None = None) ->
             f"High-level statutory publications (National Inventory, Annual Reports, Parliamentary submissions) carry {len(exec_rows)} sign-off entries from ministry-level authorities:\n"
             + exec_line
             + "\n\n"
-            f"Every name above is derived live from the signed extraction records in the database - ask for any date to see the individual sign-off."
+            "Every name above is derived live from the signed extraction records in the database - ask for any date to see the individual sign-off."
         )
     else:
         # Fallback: roster data not yet in DB (fresh deployment) - static demo roster
@@ -928,8 +929,9 @@ def _gather_shift_count_context(query: str, subsidiary: str = "", anaphora: dict
 
     db = SessionLocal()
     try:
-        from ..models import Document
         from sqlalchemy import func
+
+        from ..models import Document
 
         base = db.query(Document).filter(Document.doc_type.in_(["daily_shift_report", "stoppage_report"]))
         if subsidiary:
@@ -978,10 +980,10 @@ def _gather_shift_count_context(query: str, subsidiary: str = "", anaphora: dict
         lines = [
             f"[Shift Operations Database Summary — {sub_label}]",
             f"Total shift operations recorded: {total} (this is the total number of shifts)",
-            f"  Breakdown:",
+            "  Breakdown:",
             f"    {shift_count} are daily shift reports (normal production shifts)",
             f"    {stoppage_count} are stoppage reports (shifts with equipment/operational stoppages)",
-            f"  Both types represent individual mining shift operations.",
+            "  Both types represent individual mining shift operations.",
         ]
         if min_date and max_date:
             lines.append(f"Date range: {min_date.strftime('%d.%m.%Y')} to {max_date.strftime('%d.%m.%Y')}")
@@ -1178,7 +1180,7 @@ def _gather_ranked_shift_context(query: str, subsidiary: str = "", anaphora: dic
         direction = "lowest" if is_ascending else "highest"
         lines = [
             f"[Shift Reports Ranked by {field_label} — {direction} first]",
-            f"Note: In CIL/NLC India mine operations, 'lignite' is the type of coal mined. When the user asks about 'coal', the lignite production figure is the answer.",
+            "Note: In CIL/NLC India mine operations, 'lignite' is the type of coal mined. When the user asks about 'coal', the lignite production figure is the answer.",
             "",
         ]
         for i, r in enumerate(rows, 1):

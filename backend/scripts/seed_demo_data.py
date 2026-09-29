@@ -314,8 +314,8 @@ def build_memo_records() -> list[dict]:
 
 def seed_to_database(all_records: list[dict]) -> None:
     """Insert records into PostgreSQL using SQLAlchemy ORM."""
-    from app.db import SessionLocal, engine, Base
-    from app.models import Document, Chunk, ExtractionRun, ExtractionField
+    from app.db import Base, SessionLocal, engine
+    from app.models import Chunk, Document, ExtractionField, ExtractionRun
 
     Base.metadata.create_all(engine)
     db = SessionLocal()
@@ -377,7 +377,7 @@ def seed_to_database(all_records: list[dict]) -> None:
 
         db.commit()
         print(f"  Seeded {doc_count} documents with {field_count} extraction fields.")
-    except Exception as e:
+    except Exception:
         db.rollback()
         raise
     finally:
@@ -415,7 +415,7 @@ def main():
 
     all_records = shifts + boreholes + quarterly + memos
 
-    print(f"\n  Generated records:")
+    print("\n  Generated records:")
     print(f"    Daily shift/stoppage:  {len(shifts)}")
     print(f"    Geological boreholes:  {len(boreholes)}")
     print(f"    Quarterly production:  {len(quarterly)}")
@@ -424,14 +424,14 @@ def main():
 
     db_url = os.environ.get("DATABASE_URL", "")
     if db_url:
-        print(f"\n  Inserting into database...")
+        print("\n  Inserting into database...")
         seed_to_database(all_records)
     else:
         out_path = os.path.join(_SCRIPT_DIR, "demo_seed_data.json")
-        print(f"\n  No DATABASE_URL set — exporting to JSON instead.")
+        print("\n  No DATABASE_URL set — exporting to JSON instead.")
         seed_to_json(all_records, out_path)
 
-    print(f"\n  Done.")
+    print("\n  Done.")
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     auth_secret: str = ""
     llm_base_url: str = "http://localhost:8001/v1"
     llm_api_key: str = "EMPTY"
-    llm_model: str = "Qwen/Qwen2.5-7B-Instruct"
+    llm_model: str = "Qwen/Qwen3-8B-GGUF"
     # 384-dim to match chunks.embedding Vector(384); e5-base would be 768-dim and fail inserts
     embedding_model: str = "intfloat/multilingual-e5-small"
     data_dir: str = os.path.join(_REPO_ROOT, "data")

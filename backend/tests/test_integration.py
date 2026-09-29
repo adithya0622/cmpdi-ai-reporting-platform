@@ -9,17 +9,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 from app.auth import LEVELS, hash_password, make_token, parse_token, verify_password
 from app.extraction_schemas import expand_items, parse_extraction, parse_report_date
 from app.services.analytics import classify_stoppage, count_terms
-from app.services.extraction import _clean_subsidiary
-from app.services.extraction import SUBSIDIARY_CANONICAL, normalize_subsidiary
+from app.services.extraction import (
+    SUBSIDIARY_CANONICAL,
+    _clean_subsidiary,
+    normalize_subsidiary,
+)
 from app.services.rag import (
-    QUERY_STOP,
     _fix_hi_units,
     _fts_query,
     faithfulness,
     handle_conversational_or_meta,
 )
 from app.services.validation import check_range
-
 
 # ── 1. RAG meta handler routing ─────────────────────────────────────────────
 

@@ -15,6 +15,7 @@ import json
 import os
 import sys
 
+
 def main():
     parser = argparse.ArgumentParser(description="One-Click Fine-Tuning for Qwen 2.5 3B (CMPDI/CIL)")
     parser.add_argument("--data", default="train.jsonl", help="path to train.jsonl")
@@ -28,7 +29,12 @@ def main():
         import torch
         from datasets import Dataset
         from peft import LoraConfig, TaskType, get_peft_model
-        from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, BitsAndBytesConfig
+        from transformers import (
+            AutoModelForCausalLM,
+            AutoTokenizer,
+            BitsAndBytesConfig,
+            TrainingArguments,
+        )
         from trl import SFTTrainer
     except ImportError:
         print("Required libraries missing. Installing now...")
@@ -36,7 +42,12 @@ def main():
         import torch
         from datasets import Dataset
         from peft import LoraConfig, TaskType, get_peft_model
-        from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, BitsAndBytesConfig
+        from transformers import (
+            AutoModelForCausalLM,
+            AutoTokenizer,
+            BitsAndBytesConfig,
+            TrainingArguments,
+        )
         from trl import SFTTrainer
 
     if not torch.cuda.is_available():
@@ -53,7 +64,7 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    print(f"[*] Loading model with 4-bit quantization (QLoRA) for maximum memory efficiency...")
+    print("[*] Loading model with 4-bit quantization (QLoRA) for maximum memory efficiency...")
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
